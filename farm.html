@@ -1,0 +1,3771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#d9dfd4">
+<title>风谷农场</title>
+<style>
+  :root{
+    --paper: rgba(247, 242, 231, .78);
+    --paper-solid: #f3edde;
+    --ink: #32372e;
+    --muted: #777a6b;
+    --line: rgba(54, 57, 44, .18);
+    --line-strong: rgba(54, 57, 44, .32);
+    --green: #5f7152;
+    --green-dark: #3e4c38;
+    --gold: #ae8349;
+    --danger: #a6653c;
+    --sans: "Segoe UI Variable", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body{ margin:0; width:100%; height:100%; overflow:hidden; background:#d9dfd4; }
+  body{
+    font-family:var(--sans);
+    color:var(--ink);
+    touch-action:none;
+    overscroll-behavior:none;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+  button{ font:inherit; color:inherit; border:0; background:none; cursor:pointer; }
+  button:focus-visible{ outline:2px solid rgba(95,113,82,.72); outline-offset:3px; }
+  #scene{
+    position:fixed; inset:0; width:100%; height:100%; display:block;
+    z-index:0; opacity:0; transition:opacity 1.2s ease;
+  }
+  body.ready #scene{ opacity:1; }
+  #vignette{
+    position:fixed; inset:0; z-index:2; pointer-events:none;
+    background:
+      radial-gradient(ellipse at 50% 46%, rgba(38,43,31,0) 40%, rgba(38,43,31,.16) 100%),
+      linear-gradient(to bottom, rgba(245,242,226,.09), rgba(40,46,31,0) 18%, rgba(40,46,31,0) 82%, rgba(43,50,34,.10));
+  }
+  #grain{
+    position:fixed; inset:0; z-index:3; pointer-events:none; opacity:.065;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size:180px 180px;
+    mix-blend-mode:soft-light;
+  }
+
+  /* ---------- HUD ---------- */
+  .hud{
+    position:fixed; z-index:10; top:calc(16px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    display:flex; align-items:stretch; gap:0;
+    padding:0 4px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:12px;
+    box-shadow:0 8px 28px rgba(43, 48, 35, .10);
+    backdrop-filter:blur(12px) saturate(.9);
+    -webkit-backdrop-filter:blur(12px) saturate(.9);
+    white-space:nowrap;
+  }
+  .stat{
+    position:relative;
+    display:flex; align-items:center; gap:7px;
+    padding:9px 13px 8px;
+    min-width:92px;
+  }
+  .stat + .stat::before{
+    content:""; position:absolute; left:0; top:9px; bottom:9px; width:1px;
+    background:var(--line);
+  }
+  .stat-icon{
+    width:15px; height:15px; flex:0 0 15px; color:#6b735d;
+    display:grid; place-items:center;
+  }
+  .stat-icon svg{ width:15px; height:15px; display:block; }
+  .stat-copy{ display:flex; flex-direction:column; gap:2px; line-height:1; }
+  .stat-label{
+    font-size:9px; letter-spacing:.14em; color:var(--muted); font-weight:500;
+  }
+  .stat-value{
+    font-size:13px; font-weight:600; letter-spacing:.02em; color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+  .stat.bump .stat-value{ animation:statBump .32s ease; }
+  .stat.alert .stat-icon, .stat.alert .stat-value{ color:var(--danger); }
+  .stat.alert::after{
+    content:""; position:absolute; width:5px; height:5px; border-radius:50%;
+    background:#c07d48; top:7px; right:7px;
+  }
+  @keyframes statBump{
+    0%{ transform:translateY(0); }
+    40%{ transform:translateY(-2px); }
+    100%{ transform:translateY(0); }
+  }
+
+  /* ---------- 操作区 ---------- */
+  .action-dock{
+    position:fixed; z-index:20; right:calc(18px + env(safe-area-inset-right)); bottom:calc(20px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; align-items:stretch; gap:8px;
+    width:148px;
+  }
+  .dock-btn{
+    position:relative;
+    display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+    gap:3px;
+    min-height:46px;
+    padding:8px 12px 7px;
+    text-align:left;
+    background:rgba(246,241,229,.80);
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 6px 22px rgba(42,46,34,.08);
+    backdrop-filter:blur(10px) saturate(.9);
+    -webkit-backdrop-filter:blur(10px) saturate(.9);
+    transition:background-color .2s ease, border-color .2s ease, opacity .2s ease;
+  }
+  .dock-btn:hover{ background:rgba(250,246,236,.92); border-color:var(--line-strong); }
+  .dock-btn:active{ background:rgba(237,232,218,.96); }
+  .dock-btn:disabled{ opacity:.48; cursor:default; }
+  .dock-kicker{
+    font-size:9px; letter-spacing:.14em; color:var(--muted); line-height:1;
+  }
+  .dock-main{
+    font-size:13px; font-weight:600; letter-spacing:.04em; line-height:1.1;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+  .sell-btn .dock-main{ color:#496042; }
+  .sell-btn.is-empty .dock-main{ color:var(--muted); }
+  .dock-btn .arrow{
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    color:#7c7d6d; font-size:13px;
+  }
+
+  /* ---------- 摇杆 ---------- */
+  .joystick{
+    position:fixed; z-index:20; left:calc(24px + env(safe-area-inset-left)); bottom:calc(24px + env(safe-area-inset-bottom));
+    width:112px; height:112px; border-radius:50%;
+    display:grid; place-items:center;
+    background:rgba(250,246,235,.13);
+    border:1px solid rgba(255,253,247,.34);
+    box-shadow:inset 0 0 24px rgba(255,255,255,.08), 0 4px 18px rgba(43,47,34,.06);
+    touch-action:none;
+    opacity:.86;
+  }
+  .joystick::before, .joystick::after{
+    content:""; position:absolute; background:rgba(255,250,238,.20); border-radius:1px;
+  }
+  .joystick::before{ width:26px; height:1px; }
+  .joystick::after{ width:1px; height:26px; }
+  .stick-knob{
+    position:absolute; width:46px; height:46px; border-radius:50%;
+    left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    background:rgba(249,245,234,.38);
+    border:1px solid rgba(255,253,246,.55);
+    box-shadow:0 4px 12px rgba(38,43,31,.12), inset 0 0 14px rgba(255,255,255,.24);
+    will-change:transform;
+  }
+  .joystick.dragging .stick-knob{ background:rgba(251,247,237,.48); }
+  .move-hint{
+    position:fixed; z-index:11; left:50%; bottom:calc(26px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);
+    font-size:10px; letter-spacing:.10em; color:rgba(245,241,229,.84);
+    text-shadow:0 1px 6px rgba(32,38,26,.42);
+    pointer-events:none; opacity:1; transition:opacity .6s ease;
+    white-space:nowrap;
+  }
+  .move-hint.hide{ opacity:0; }
+
+  /* ---------- 侧边升级面板 ---------- */
+  .panel-scrim{
+    position:fixed; inset:0; z-index:30; background:rgba(45,50,37,.10);
+    opacity:0; visibility:hidden; pointer-events:none; transition:opacity .28s ease, visibility .28s ease;
+  }
+  .panel-scrim.open{ opacity:1; visibility:visible; pointer-events:auto; }
+  .side-panel{
+    position:fixed; z-index:35; top:0; right:0;
+    height:100%; width:min(336px, 92vw);
+    padding:calc(22px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column;
+    background:rgba(245,239,227,.94);
+    border-left:1px solid var(--line);
+    box-shadow:-20px 0 54px rgba(40,45,33,.14);
+    backdrop-filter:blur(16px) saturate(.9);
+    -webkit-backdrop-filter:blur(16px) saturate(.9);
+    opacity:0; visibility:hidden;
+    transform:translateY(14px);
+    transition:opacity .30s ease, transform .30s cubic-bezier(.22,.72,.28,1), visibility .30s ease;
+  }
+  .side-panel.open{ opacity:1; visibility:visible; transform:translateY(0); }
+  .panel-head{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+    padding-bottom:16px; border-bottom:1px solid var(--line);
+  }
+  .panel-eyebrow{
+    margin:0 0 5px; font-size:9px; letter-spacing:.16em; color:var(--muted);
+  }
+  .panel-head h2{
+    margin:0; font-size:20px; font-weight:600; letter-spacing:.08em; color:var(--ink);
+  }
+  .panel-head .sub{
+    margin:7px 0 0; font-size:10px; line-height:1.5; color:var(--muted); letter-spacing:.04em;
+  }
+  .close-panel{
+    width:34px; height:34px; flex:0 0 34px;
+    display:grid; place-items:center; margin-top:-4px;
+    border-radius:50%; border:1px solid transparent; color:#6e7263;
+    font-size:18px; line-height:1;
+    transition:background-color .2s ease, border-color .2s ease;
+  }
+  .close-panel:hover{ background:rgba(255,255,255,.34); border-color:var(--line); }
+  .upgrade-list{
+    overflow-y:auto; overscroll-behavior:contain; flex:1;
+    margin:0 -20px; padding:4px 20px 8px;
+    scrollbar-width:thin;
+  }
+  .upgrade-row{
+    display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center;
+    padding:14px 0 13px; border-bottom:1px solid var(--line);
+  }
+  .upgrade-row:last-child{ border-bottom:0; }
+  .upgrade-info{ min-width:0; }
+  .upgrade-name{
+    display:flex; align-items:baseline; gap:7px;
+    font-size:13px; font-weight:600; letter-spacing:.03em; line-height:1.2;
+  }
+  .upgrade-name em{
+    font-style:normal; font-size:9px; font-weight:500; letter-spacing:.08em;
+    color:var(--muted); font-variant-numeric:tabular-nums;
+  }
+  .upgrade-effect{
+    margin-top:5px; font-size:10px; line-height:1.45; color:var(--muted);
+    letter-spacing:.02em;
+    font-variant-numeric:tabular-nums;
+  }
+  .upgrade-btn{
+    width:72px; min-height:42px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    padding:5px 7px;
+    border-radius:8px; border:1px solid rgba(68,79,57,.28);
+    background:rgba(255,252,244,.38);
+    transition:background-color .2s ease, border-color .2s ease, color .2s ease;
+  }
+  .upgrade-btn .action{ font-size:10px; letter-spacing:.06em; color:#48563f; font-weight:600; }
+  .upgrade-btn .price{ font-size:10px; letter-spacing:.01em; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .upgrade-btn:not(:disabled):hover{ background:#53664a; border-color:#53664a; }
+  .upgrade-btn:not(:disabled):hover .action,
+  .upgrade-btn:not(:disabled):hover .price{ color:#f8f3e5; }
+  .upgrade-btn:disabled{ opacity:.42; cursor:default; }
+  .upgrade-btn.maxed .action{ color:var(--muted); }
+  .panel-foot{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding-top:14px; border-top:1px solid var(--line);
+  }
+  .save-note{ font-size:9px; letter-spacing:.08em; color:var(--muted); }
+  .sound-toggle{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 9px; border-radius:7px; border:1px solid var(--line);
+    font-size:9px; letter-spacing:.08em; color:var(--muted);
+    transition:background-color .2s ease, border-color .2s ease;
+  }
+  .sound-toggle:hover{ background:rgba(255,255,255,.28); border-color:var(--line-strong); }
+  .sound-toggle .dot{
+    width:5px; height:5px; border-radius:50%; background:#89927a;
+  }
+  .sound-toggle.on .dot{ background:var(--green); }
+  .sound-toggle.off .dot{ background:#b0a997; }
+
+  /* ---------- 提示 ---------- */
+  .toast{
+    position:fixed; z-index:40; left:50%; bottom:calc(154px + env(safe-area-inset-bottom));
+    transform:translate(-50%, 8px);
+    max-width:calc(100vw - 44px);
+    padding:8px 13px 7px;
+    background:rgba(47,55,42,.88);
+    color:#f4efdf;
+    border:1px solid rgba(255,255,255,.13);
+    border-radius:9px;
+    font-size:11px; letter-spacing:.05em; line-height:1.45;
+    text-align:center; white-space:nowrap;
+    opacity:0; pointer-events:none;
+    transition:opacity .24s ease, transform .24s ease;
+    box-shadow:0 10px 28px rgba(32,37,26,.16);
+  }
+  .toast.show{ opacity:1; transform:translate(-50%, 0); }
+
+  /* ---------- 载入 ---------- */
+  #loading{
+    position:fixed; inset:0; z-index:50;
+    display:grid; place-items:center;
+    background:#e8e5d8;
+    transition:opacity .8s ease, visibility .8s ease;
+  }
+  #loading::before{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:
+      radial-gradient(ellipse at 50% 38%, rgba(255,252,240,.50), rgba(255,252,240,0) 62%),
+      linear-gradient(to bottom, rgba(207,218,205,.22), rgba(231,225,207,.0) 55%, rgba(197,193,166,.16));
+  }
+  #loading.ready{ opacity:0; visibility:hidden; pointer-events:none; }
+  .load-inner{
+    position:relative; z-index:1;
+    width:min(280px, calc(100vw - 64px));
+    text-align:center;
+    color:#393f33;
+  }
+  .load-seal{
+    width:46px; height:46px; margin:0 auto 20px;
+    border-radius:50%;
+    border:1px solid rgba(61,69,52,.30);
+    display:grid; place-items:center;
+    color:#526249;
+  }
+  .load-seal svg{ width:24px; height:24px; }
+  .load-kicker{
+    margin:0 0 12px; font-size:9px; letter-spacing:.26em; color:#7c7f6c;
+  }
+  .load-inner h1{
+    margin:0; font-size:26px; font-weight:500; letter-spacing:.20em; color:#353c2f;
+  }
+  .load-inner p{
+    margin:12px 0 27px; font-size:10px; letter-spacing:.12em; color:#7d806d;
+  }
+  .load-bar{
+    position:relative; height:1px; margin:0 auto; width:148px;
+    background:rgba(63,71,53,.18); overflow:hidden;
+  }
+  .load-bar i{
+    position:absolute; inset:0 auto 0 0; width:42%;
+    background:#59694e;
+    animation:loadingSweep 1.8s cubic-bezier(.4,0,.2,1) infinite;
+  }
+  @keyframes loadingSweep{
+    0%{ transform:translateX(-115%); }
+    100%{ transform:translateX(350%); }
+  }
+  .load-error{
+    display:none; margin-top:18px; font-size:11px; line-height:1.6; letter-spacing:.02em; color:#9a5b38;
+  }
+  #loading.failed .load-bar{ display:none; }
+  #loading.failed .load-error{ display:block; }
+
+  /* ---------- 小屏适配 ---------- */
+  @media (max-width: 720px){
+    .hud{ top:calc(10px + env(safe-area-inset-top)); border-radius:10px; }
+    .stat{ min-width:78px; padding:8px 10px 7px; gap:6px; }
+    .stat-icon, .stat-icon svg{ width:13px; height:13px; flex-basis:13px; }
+    .stat-label{ font-size:8px; }
+    .stat-value{ font-size:12px; }
+    .joystick{ width:104px; height:104px; left:calc(18px + env(safe-area-inset-left)); bottom:calc(18px + env(safe-area-inset-bottom)); }
+    .stick-knob{ width:43px; height:43px; }
+    .action-dock{ width:136px; right:calc(14px + env(safe-area-inset-right)); bottom:calc(16px + env(safe-area-inset-bottom)); }
+    .dock-btn{ padding:7px 11px 6px; }
+    .move-hint{ display:none; }
+    .toast{ bottom:calc(144px + env(safe-area-inset-bottom)); }
+    .side-panel{ width:min(336px, 94vw); padding-left:18px; padding-right:18px; }
+    .upgrade-list{ margin-left:-18px; margin-right:-18px; padding-left:18px; padding-right:18px; }
+  }
+  @media (max-height: 500px){
+    .stat{ padding-top:7px; padding-bottom:6px; }
+    .side-panel{ padding-top:calc(12px + env(safe-area-inset-top)); }
+    .panel-head{ padding-bottom:10px; }
+    .upgrade-row{ padding-top:10px; padding-bottom:9px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="vignette" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+
+  <header class="hud" id="hud" aria-label="农场概况">
+    <div class="stat" id="statCarry">
+      <span class="stat-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M7 9.2h10a1.4 1.4 0 0 1 1.4 1.4v8.1a1.4 1.4 0 0 1-1.4 1.4H7A1.4 1.4 0 0 1 5.6 18.7v-8.1A1.4 1.4 0 0 1 7 9.2Z"/>
+          <path d="M8.7 9.2V7.7a3.3 3.3 0 0 1 6.6 0v1.5M9.1 15h5.8"/>
+        </svg>
+      </span>
+      <span class="stat-copy">
+        <span class="stat-label">背负</span>
+        <strong class="stat-value" id="carryValue">0 / 18</strong>
+      </span>
+    </div>
+    <div class="stat" id="statStorage">
+      <span class="stat-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M4.4 9.8 12 5.7l7.6 4.1v8.4L12 22l-7.6-3.8Z"/>
+          <path d="M4.4 9.8 12 14l7.6-4.2M12 14v8"/>
+          <path d="M8.3 7.7V4.3l3.7 2 3.7-2v3.4"/>
+        </svg>
+      </span>
+      <span class="stat-copy">
+        <span class="stat-label">谷仓</span>
+        <strong class="stat-value" id="storageValue">0 / 120</strong>
+      </span>
+    </div>
+    <div class="stat" id="statCoins">
+      <span class="stat-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="12" cy="12" r="7.2"/>
+          <path d="M12 8.2v7.6M9.8 10.4h3.1a1.6 1.6 0 0 1 0 3.2H9.8"/>
+        </svg>
+      </span>
+      <span class="stat-copy">
+        <span class="stat-label">金币</span>
+        <strong class="stat-value" id="coinValue">0</strong>
+      </span>
+    </div>
+  </header>
+
+  <nav class="action-dock" aria-label="农场操作">
+    <button class="dock-btn sell-btn is-empty" id="sellBtn" type="button" aria-label="一键出售库存作物">
+      <span class="dock-kicker">库存</span>
+      <span class="dock-main" id="sellLabel">一键出售</span>
+      <span class="arrow" aria-hidden="true">›</span>
+    </button>
+    <button class="dock-btn" id="openPanel" type="button" aria-label="打开农场升级面板" aria-expanded="false" aria-controls="upgradePanel">
+      <span class="dock-kicker">经营</span>
+      <span class="dock-main">农场升级</span>
+      <span class="arrow" aria-hidden="true">›</span>
+    </button>
+  </nav>
+
+  <div class="joystick" id="joystick" aria-label="移动摇杆" role="application">
+    <div class="stick-knob" id="stickKnob"></div>
+  </div>
+  <div class="move-hint" id="moveHint">方向键 / WASD · 走近作物自动收割</div>
+
+  <div class="panel-scrim" id="panelScrim"></div>
+  <aside class="side-panel" id="upgradePanel" aria-hidden="true" aria-label="农场升级">
+    <header class="panel-head">
+      <div>
+        <p class="panel-eyebrow">农场经营</p>
+        <h2>温和升级</h2>
+        <p class="sub">即时生效，不赶时间。金币只来自出售作物。</p>
+      </div>
+      <button class="close-panel" id="closePanel" type="button" aria-label="关闭升级面板">×</button>
+    </header>
+    <div class="upgrade-list" id="upgradeList"></div>
+    <footer class="panel-foot">
+      <span class="save-note">进度自动保存</span>
+      <button class="sound-toggle on" id="soundToggle" type="button" aria-pressed="true">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="soundLabel">环境音 开</span>
+      </button>
+    </footer>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div id="loading">
+    <div class="load-inner">
+      <div class="load-seal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+          <path d="M12 20.5V7.3"/>
+          <path d="M12 8.2c1.6-2.5 4-1.9 4-1.9s.2 2.5-2.2 3.5c-1.1.5-1.8.7-1.8.7"/>
+          <path d="M12 11.7c-1.8-2.2-4.2-1.3-4.2-1.3s0 2.5 2.5 3.3c1 .3 1.7.4 1.7.4"/>
+          <path d="M12.1 5.3v3M9.3 3.7v2.5M14.9 3.7v2.5"/>
+        </svg>
+      </div>
+      <p class="load-kicker">WINDFIELD FARM</p>
+      <h1>风谷农场</h1>
+      <p>一片慢慢生长的麦田</p>
+      <div class="load-bar"><i></i></div>
+      <div class="load-error" id="loadError">正在准备的田野遇到了问题。请刷新页面，或检查浏览器是否支持 WebGL。</div>
+    </div>
+  </div>
+
+  <noscript><div style="position:fixed;inset:0;background:#e8e5d8;display:grid;place-items:center;z-index:60;font-family:sans-serif;color:#343b2e">请开启 JavaScript 后进入农场。</div></noscript>
+
+  <script>
+    window.__farmReady = false;
+    window.addEventListener('error', function(e){
+      if (window.__farmReady) return;
+      var loading = document.getElementById('loading');
+      if (!loading) return;
+      loading.classList.add('failed');
+      var msg = document.getElementById('loadError');
+      if (msg && e && e.message) msg.textContent = '加载失败：' + e.message;
+    });
+  </script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module">
+import * as THREE from 'three';
+
+/* =========================================================
+   基础状态与工具
+   ========================================================= */
+const SAVE_KEY = 'windfield-farm-v1';
+const IS_COARSE = window.matchMedia('(pointer: coarse)').matches;
+const IS_MOBILE = IS_COARSE || window.innerWidth < 820;
+const MAX_LEVELS = { carry: 8, radius: 6, speed: 6, storage: 6, fields: 3 };
+const CROPS = {
+  wheat: { label: '小麦', value: 6 },
+  hay:   { label: '干草', value: 4 },
+  oat:   { label: '燕麦', value: 7 }
+};
+const CROP_KEYS = Object.keys(CROPS);
+const FIELD_UNLOCK_PRICES = [120, 220, 340];
+
+const $ = (id) => document.getElementById(id);
+const ui = {
+  carry: $('carryValue'),
+  storage: $('storageValue'),
+  coins: $('coinValue'),
+  statCarry: $('statCarry'),
+  statStorage: $('statStorage'),
+  statCoins: $('statCoins'),
+  sellBtn: $('sellBtn'),
+  sellLabel: $('sellLabel'),
+  openPanel: $('openPanel'),
+  closePanel: $('closePanel'),
+  panel: $('upgradePanel'),
+  scrim: $('panelScrim'),
+  upgradeList: $('upgradeList'),
+  soundToggle: $('soundToggle'),
+  soundLabel: $('soundLabel'),
+  toast: $('toast'),
+  hint: $('moveHint'),
+  loading: $('loading'),
+  joystick: $('joystick'),
+  knob: $('stickKnob')
+};
+
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function damp(current, target, lambda, dt) { return current + (target - current) * (1 - Math.exp(-lambda * dt)); }
+function randRange(a, b) { return a + Math.random() * (b - a); }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function normalizeAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+function formatNumber(n) { return Math.max(0, Math.floor(n)).toLocaleString('zh-CN'); }
+const seedRandom = (() => {
+  let seed = 0x9e3779b9;
+  return () => {
+    seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+    return (seed >>> 0) / 4294967296;
+  };
+})();
+function srand(a, b) { return a + seedRandom() * (b - a); }
+
+function blankState() {
+  return {
+    v: 1,
+    coins: 0,
+    storage: { wheat: 0, hay: 0, oat: 0 },
+    back: { wheat: 0, hay: 0, oat: 0 },
+    levels: { carry: 0, radius: 0, speed: 0, storage: 0, fields: 0 },
+    soundOn: true
+  };
+}
+
+function loadState() {
+  const fallback = blankState();
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return fallback;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return fallback;
+    const result = blankState();
+    result.coins = Math.max(0, Math.floor(Number(data.coins) || 0));
+    result.soundOn = data.soundOn !== false;
+    for (const k of CROP_KEYS) {
+      result.storage[k] = Math.max(0, Math.floor(Number(data.storage && data.storage[k]) || 0));
+      result.back[k] = Math.max(0, Math.floor(Number(data.back && data.back[k]) || 0));
+    }
+    for (const k of Object.keys(MAX_LEVELS)) {
+      const n = Math.floor(Number(data.levels && data.levels[k]) || 0);
+      result.levels[k] = clamp(n, 0, MAX_LEVELS[k]);
+    }
+    return result;
+  } catch (err) {
+    console.warn('存档读取失败，已使用新的农场。', err);
+    return fallback;
+  }
+}
+
+const state = loadState();
+const stats = { capacity: 18, radius: 2.35, speed: 4.2, storage: 120, unlockedFields: 3 };
+
+function recalcStats() {
+  stats.capacity = 18 + state.levels.carry * 6;
+  stats.radius = 2.35 + state.levels.radius * 0.52;
+  stats.speed = 4.2 + state.levels.speed * 0.38;
+  stats.storage = 120 + state.levels.storage * 60;
+  stats.unlockedFields = 3 + state.levels.fields;
+  let bt = 0;
+  for (const k of CROP_KEYS) bt += state.back[k];
+  if (bt > stats.capacity) {
+    let excess = bt - stats.capacity;
+    for (const k of CROP_KEYS) {
+      const cut = Math.min(state.back[k], excess);
+      state.back[k] -= cut;
+      excess -= cut;
+      if (!excess) break;
+    }
+  }
+}
+recalcStats();
+
+function totalBack() { return CROP_KEYS.reduce((sum, k) => sum + state.back[k], 0); }
+function totalStorage() { return CROP_KEYS.reduce((sum, k) => sum + state.storage[k], 0); }
+function storageValue() {
+  return CROP_KEYS.reduce((sum, k) => sum + state.storage[k] * CROPS[k].value, 0);
+}
+function backValue() {
+  return CROP_KEYS.reduce((sum, k) => sum + state.back[k] * CROPS[k].value, 0);
+}
+
+let saveTimer = 0;
+function saveNow() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.warn('保存进度失败', err);
+  }
+}
+function queueSave(delay = 900) {
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveNow, delay);
+}
+
+/* =========================================================
+   渲染基础
+   ========================================================= */
+const canvas = $('scene');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0xd3dbd2, 0.0102);
+const camera = new THREE.PerspectiveCamera(37, 1, 0.1, 260);
+const CAM_OFFSET = new THREE.Vector3(14, 17.2, 14);
+const CAM_LOOK = new THREE.Vector3();
+const CAM_POS = new THREE.Vector3();
+const SUN_DIR = new THREE.Vector3(0.45, 0.72, 0.48).normalize();
+let renderer;
+let sunLight;
+let hemiLight;
+let fillLight;
+let skyUniforms;
+let windTime = 0;
+let windProgramCounter = 0;
+const windShaders = [];
+const world = {
+  fields: [],
+  treeCanopies: [],
+  clouds: [],
+  particles: null,
+  fieldsById: {},
+  barnRing: null,
+  water: null,
+  waterBump: null
+};
+const colliders = [];
+const game = {
+  pos: new THREE.Vector3(0, 0, 8),
+  vel: new THREE.Vector3(),
+  facing: 0,
+  walkPhase: 0,
+  moveBlend: 0,
+  harvestPulse: 0,
+  unloadPulse: 0,
+  harvestTimer: 0,
+  barnCooldown: 0,
+  wasFull: false,
+  ready: false,
+  elapsed: 0,
+  intro: 0
+};
+const input = {
+  x: 0, y: 0,
+  pointerId: null,
+  keys: new Set(),
+  active: false
+};
+const clock = new THREE.Clock();
+let playerRig = null;
+let uiDirty = true;
+let toastTimeout = 0;
+let hintTimeout = 0;
+let harvestToastCooldown = 0;
+let fullPromptCooldown = 0;
+let storageFullCooldown = 0;
+
+function initRenderer() {
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+    stencil: false
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.5 : 1.8));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.06;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setClearColor(0xcfd8ce, 1);
+}
+
+function initCamera() {
+  camera.position.copy(CAM_OFFSET).add(game.pos);
+  camera.position.y += 4.6;
+  CAM_LOOK.copy(game.pos).add(new THREE.Vector3(0, 1.15, 0));
+  camera.lookAt(CAM_LOOK);
+  CAM_POS.copy(camera.position);
+}
+
+function initLights() {
+  hemiLight = new THREE.HemisphereLight(0xccdce2, 0x665f47, 1.25);
+  scene.add(hemiLight);
+
+  sunLight = new THREE.DirectionalLight(0xffe1b4, 2.35);
+  sunLight.position.copy(SUN_DIR).multiplyScalar(44);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(IS_MOBILE ? 1024 : 2048, IS_MOBILE ? 1024 : 2048);
+  sunLight.shadow.camera.near = 1;
+  sunLight.shadow.camera.far = 100;
+  sunLight.shadow.camera.left = -31;
+  sunLight.shadow.camera.right = 31;
+  sunLight.shadow.camera.top = 31;
+  sunLight.shadow.camera.bottom = -31;
+  sunLight.shadow.bias = -0.00055;
+  sunLight.shadow.normalBias = 0.035;
+  sunLight.shadow.radius = 2.2;
+  scene.add(sunLight);
+  scene.add(sunLight.target);
+
+  fillLight = new THREE.DirectionalLight(0xbcd3d9, 0.38);
+  fillLight.position.set(-18, 22, -14);
+  scene.add(fillLight);
+}
+
+/* =========================================================
+   启动
+   ========================================================= */
+function init() {
+  initRenderer();
+  refineTextureQuality();
+  initCamera();
+  initLights();
+  createSky();
+  createGround();
+  createPaths();
+  createFields();
+  createScenery();
+  createCharacter();
+  createParticles();
+  bindInput();
+  bindUI();
+  resize();
+  refreshAllUI();
+  initAudio();
+  syncAudioButton();
+
+  // 预编译材质，避免入场后第一次收割才出现卡顿。
+  try { renderer.compile(scene, camera); } catch (err) { console.warn('材质预编译跳过', err); }
+  renderer.render(scene, camera);
+
+  window.__farmReady = true;
+  window.setTimeout(() => {
+    ui.loading.classList.add('ready');
+    document.body.classList.add('ready');
+    game.ready = true;
+    clock.start();
+    requestAnimationFrame(animate);
+    showHint(IS_COARSE ? 5200 : 6800);
+  }, 320);
+}
+
+/* =========================================================
+   程序化材质
+   ========================================================= */
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+function finalizeTexture(canvas, repeatX = 1, repeatY = 1, srgb = true) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  // 贴图在渲染器创建之前就会生成，这里先给一个安全值，启动后再提升。
+  tex.anisotropy = renderer ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
+  if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function refineTextureQuality() {
+  if (!renderer) return;
+  const max = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  for (const key in tex) {
+    const t = tex[key];
+    if (t && t.isTexture) {
+      t.anisotropy = max;
+      t.needsUpdate = true;
+    }
+  }
+}
+function paintNoise(ctx, w, h, base, variance, scale = 1) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const broad = Math.sin(x * 0.035 * scale + 1.2) + Math.sin(y * 0.048 * scale + 2.3) + Math.sin((x + y) * 0.014 * scale);
+      const fine = Math.random() - 0.5;
+      const n = broad * 0.55 + fine;
+      d[i] = clamp(base[0] + n * variance, 0, 255);
+      d[i + 1] = clamp(base[1] + n * variance, 0, 255);
+      d[i + 2] = clamp(base[2] + n * variance, 0, 255);
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function makeGrassTexture() {
+  const size = 512;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [116, 137, 91], 20);
+  ctx.globalAlpha = 0.20;
+  for (let i = 0; i < 22; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 40 + Math.random() * 90;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, i % 3 === 0 ? 'rgba(208,191,126,.5)' : 'rgba(85,106,76,.45)');
+    grad.addColorStop(1, 'rgba(95,110,78,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.62, Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.42;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3200; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const len = 3 + Math.random() * 10;
+    const bend = (Math.random() - 0.5) * 7;
+    const shade = Math.random();
+    ctx.strokeStyle = shade < 0.23 ? 'rgba(171,181,127,.50)' : shade < 0.7 ? 'rgba(91,113,78,.44)' : 'rgba(126,146,92,.52)';
+    ctx.lineWidth = 0.55 + Math.random() * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + bend * 0.35, y - len * 0.45, x + bend, y - len);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.22;
+  for (let i = 0; i < 220; i++) {
+    ctx.fillStyle = i % 6 === 0 ? 'rgba(231,214,161,.75)' : 'rgba(72,94,64,.55)';
+    ctx.beginPath();
+    ctx.arc(Math.random() * size, Math.random() * size, 0.7 + Math.random() * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 14, 14);
+}
+
+function makeDirtTexture() {
+  const size = 384;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [142, 121, 91], 22, 0.9);
+  ctx.globalAlpha = 0.42;
+  for (let i = 0; i < 28; i++) {
+    const x = Math.random() * size, y = Math.random() * size;
+    const r = 12 + Math.random() * 55;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(105,89,67,.45)');
+    g.addColorStop(1, 'rgba(105,89,67,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+  for (let i = 0; i < 520; i++) {
+    const x = Math.random() * size, y = Math.random() * size;
+    const r = 0.6 + Math.random() * 2.8;
+    ctx.fillStyle = i % 5 === 0 ? 'rgba(193,175,143,.55)' : 'rgba(89,77,60,.54)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.66, Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.30;
+  for (let i = 0; i < 70; i++) {
+    ctx.strokeStyle = 'rgba(72,61,47,.65)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(Math.random() * size, Math.random() * size);
+    ctx.lineTo(Math.random() * size, Math.random() * size);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeSoilTexture() {
+  const size = 512;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [102, 84, 60], 17, 1.2);
+  ctx.globalAlpha = 0.46;
+  for (let y = 34; y < size; y += 72) {
+    ctx.strokeStyle = 'rgba(57,45,31,.62)';
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(172,147,108,.30)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, y - 5); ctx.lineTo(size, y - 5); ctx.stroke();
+  }
+  for (let i = 0; i < 1500; i++) {
+    ctx.fillStyle = i % 7 === 0 ? 'rgba(178,153,111,.44)' : 'rgba(60,48,34,.35)';
+    ctx.beginPath();
+    ctx.arc(Math.random() * size, Math.random() * size, 0.7 + Math.random() * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeStrawTexture(tie = false) {
+  const size = 256;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [178, 147, 86], 15, 0.8);
+  ctx.globalAlpha = 0.78;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 390; i++) {
+    const x = Math.random() * size;
+    const shade = Math.random();
+    ctx.strokeStyle = shade < 0.22 ? 'rgba(230,201,128,.74)' : shade < 0.66 ? 'rgba(147,112,57,.80)' : 'rgba(197,163,90,.78)';
+    ctx.lineWidth = 0.6 + Math.random() * 1.3;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + (Math.random() - 0.5) * 5, size);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  if (tie) {
+    ctx.fillStyle = 'rgba(78,62,42,.88)';
+    ctx.fillRect(0, size * 0.63, size, 11);
+    ctx.fillStyle = 'rgba(213,184,119,.35)';
+    ctx.fillRect(0, size * 0.63 + 12, size, 2);
+    ctx.fillStyle = 'rgba(51,40,28,.55)';
+    ctx.fillRect(0, size * 0.63 - 3, size, 2);
+  }
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeWoodTexture() {
+  const size = 512;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [112, 87, 63], 14, 0.6);
+  ctx.globalAlpha = 0.36;
+  for (let i = 0; i < 170; i++) {
+    const y = Math.random() * size;
+    const w = 30 + Math.random() * 220;
+    const x = Math.random() * size;
+    ctx.strokeStyle = i % 4 === 0 ? 'rgba(57,42,28,.55)' : 'rgba(175,143,103,.34)';
+    ctx.lineWidth = 0.7 + Math.random() * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + w * 0.28, y - 4, x + w * 0.65, y + 4, x + w, y - 1);
+    ctx.stroke();
+  }
+  for (let i = 0; i < 5; i++) {
+    const x = Math.random() * size, y = Math.random() * size;
+    ctx.strokeStyle = 'rgba(53,38,26,.38)';
+    ctx.lineWidth = 1;
+    for (let r = 2; r < 13; r += 3) {
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 1.5, r, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 0.18;
+  for (let i = 0; i < 220; i++) {
+    ctx.fillStyle = Math.random() < 0.5 ? '#34281c' : '#d1b183';
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1, 1 + Math.random() * 3);
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeRoofTexture() {
+  const size = 512;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [122, 83, 70], 16, 0.8);
+  ctx.globalAlpha = 0.52;
+  for (let row = 0; row < 12; row++) {
+    const y = row * 43;
+    for (let col = -1; col < 13; col++) {
+      const x = col * 45 + (row % 2 ? 22 : 0);
+      ctx.fillStyle = (col + row) % 3 === 0 ? 'rgba(144,104,87,.38)' : 'rgba(94,64,56,.32)';
+      ctx.beginPath();
+      ctx.roundRect(x, y, 44, 38, [0, 0, 6, 6]);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(56,38,33,.26)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y + 2); ctx.lineTo(x + 44, y + 2); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 3, 2);
+}
+
+function makeStoneTexture() {
+  const size = 512;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  paintNoise(ctx, size, size, [123, 120, 109], 14, 0.75);
+  let y = 8;
+  const rowH = 30;
+  while (y < size) {
+    let x = -10 + Math.random() * 30;
+    const h = rowH - 3 + Math.random() * 5;
+    while (x < size) {
+      const w = 35 + Math.random() * 48;
+      ctx.fillStyle = `rgba(${92 + Math.floor(Math.random() * 35)},${89 + Math.floor(Math.random() * 31)},${82 + Math.floor(Math.random() * 27)},.42)`;
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, 4);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(65,63,56,.30)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      x += w + 3;
+    }
+    y += rowH;
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 2, 2);
+}
+
+function makeWheatCardTexture(kind) {
+  const w = 256, h = 512;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  ctx.lineCap = 'round';
+  const oat = kind === 'oat';
+  const stems = oat ? 5 : 6;
+  for (let s = 0; s < stems; s++) {
+    const baseX = 24 + s * 41 + (srand(-8, 8));
+    const topY = oat ? srand(185, 250) : srand(175, 225);
+    const topX = baseX + srand(-16, 16);
+    const stemGrad = ctx.createLinearGradient(0, 512, 0, topY);
+    if (oat) {
+      stemGrad.addColorStop(0, 'rgba(119,139,85,.84)');
+      stemGrad.addColorStop(0.55, 'rgba(155,160,101,.88)');
+      stemGrad.addColorStop(1, 'rgba(199,183,124,.92)');
+    } else {
+      stemGrad.addColorStop(0, 'rgba(112,132,75,.87)');
+      stemGrad.addColorStop(0.38, 'rgba(161,153,87,.90)');
+      stemGrad.addColorStop(1, 'rgba(210,173,93,.94)');
+    }
+    ctx.strokeStyle = stemGrad;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(baseX, 514);
+    ctx.quadraticCurveTo(baseX + srand(-14, 14), 340, topX, topY);
+    ctx.stroke();
+
+    // 柔和的叶片
+    const leafY = 300 + srand(0, 100);
+    ctx.strokeStyle = oat ? 'rgba(145,153,96,.62)' : 'rgba(136,142,83,.64)';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(baseX, leafY + 65);
+    ctx.quadraticCurveTo(baseX + srand(-35, 35), leafY + 20, baseX + srand(-48, 48), leafY - 12);
+    ctx.stroke();
+    ctx.strokeStyle = oat ? 'rgba(185,178,119,.50)' : 'rgba(179,163,92,.52)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(baseX + 1, leafY + 50);
+    ctx.quadraticCurveTo(baseX + srand(16, 55), leafY + 18, baseX + srand(34, 70), leafY + 2);
+    ctx.stroke();
+
+    if (oat) {
+      // 燕麦下垂的圆锥花序
+      const drop = srand(30, 58);
+      for (let b = 0; b < 3; b++) {
+        const bx = topX + srand(-14, 14);
+        const by = topY + 12 + b * 10;
+        ctx.strokeStyle = 'rgba(197,176,106,.78)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(topX, topY);
+        ctx.quadraticCurveTo(bx, by + 10, bx + srand(-9, 9), by + drop);
+        ctx.stroke();
+        for (let g = 0; g < 7; g++) {
+          const gx = bx + srand(-8, 8);
+          const gy = by + drop - g * 4.2;
+          ctx.fillStyle = g % 2 ? 'rgba(218,196,129,.88)' : 'rgba(188,160,92,.84)';
+          ctx.beginPath();
+          ctx.ellipse(gx, gy, 1.6, 4.1, srand(-0.4, 0.4), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else {
+      // 麦穗
+      const headBottom = topY + 92;
+      const headTop = topY;
+      for (let g = 0; g < 12; g++) {
+        const t = g / 11;
+        const gy = headBottom - t * (headBottom - headTop);
+        const spread = 7.2 * (1 - Math.abs(t - 0.58) * 0.7);
+        for (const side of [-1, 1]) {
+          const gx = topX + side * spread * 0.58;
+          ctx.fillStyle = g % 3 === 0 ? 'rgba(227,194,112,.90)' : g % 2 ? 'rgba(194,156,80,.91)' : 'rgba(211,176,93,.91)';
+          ctx.beginPath();
+          ctx.ellipse(gx, gy, 2.2, 4.5, side * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(219,194,128,.42)';
+          ctx.lineWidth = 0.65;
+          ctx.beginPath();
+          ctx.moveTo(gx + side * 2, gy - 2);
+          ctx.quadraticCurveTo(gx + side * 9, gy - 16, gx + side * 16 + srand(-5, 5), headTop - srand(28, 54));
+          ctx.stroke();
+        }
+      }
+      ctx.strokeStyle = 'rgba(218,181,102,.88)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(topX, headBottom);
+      ctx.lineTo(topX + srand(-2, 2), headTop - 9);
+      ctx.stroke();
+    }
+  }
+  // 底部少量枯叶
+  ctx.globalAlpha = 0.5;
+  for (let i = 0; i < 15; i++) {
+    ctx.strokeStyle = 'rgba(155,135,74,.55)';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(srand(20, 235), srand(420, 510));
+    ctx.quadraticCurveTo(srand(0, 256), srand(430, 520), srand(0, 256), srand(440, 520));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeGrassCardTexture(dry = false) {
+  const w = 256, h = 256;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 34; i++) {
+    const x = 10 + Math.random() * 236;
+    const len = 70 + Math.random() * 155;
+    const bend = (Math.random() - 0.5) * 55;
+    const shade = Math.random();
+    ctx.strokeStyle = dry
+      ? (shade < 0.3 ? 'rgba(183,163,108,.52)' : shade < 0.7 ? 'rgba(134,122,83,.58)' : 'rgba(101,97,64,.55)')
+      : (shade < 0.25 ? 'rgba(153,167,111,.58)' : shade < 0.7 ? 'rgba(80,110,69,.62)' : 'rgba(107,135,80,.62)');
+    ctx.lineWidth = 1.2 + Math.random() * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x, 258);
+    ctx.quadraticCurveTo(x + bend * 0.35, 258 - len * 0.6, x + bend, 258 - len);
+    ctx.stroke();
+  }
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeFlowerCardTexture() {
+  const w = 256, h = 256;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.lineCap = 'round';
+  const palette = ['rgba(241,236,216,.9)', 'rgba(193,207,221,.92)', 'rgba(234,219,167,.9)', 'rgba(206,178,200,.8)'];
+  for (let i = 0; i < 10; i++) {
+    const x = 22 + Math.random() * 212;
+    const topY = 55 + Math.random() * 120;
+    ctx.strokeStyle = 'rgba(94,124,77,.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, 258);
+    ctx.quadraticCurveTo(x + srand(-9, 9), topY + 55, x + srand(-10, 10), topY);
+    ctx.stroke();
+    const fx = x + srand(-8, 8);
+    const fy = topY - srand(0, 15);
+    ctx.fillStyle = palette[i % palette.length];
+    for (let p = 0; p < 5; p++) {
+      const a = p * Math.PI * 2 / 5;
+      ctx.beginPath();
+      ctx.ellipse(fx + Math.cos(a) * 4.2, fy + Math.sin(a) * 4.2, 3.8, 2.5, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(191,153,85,.9)';
+    ctx.beginPath();
+    ctx.arc(fx, fy, 2.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return finalizeTexture(c, 1, 1);
+}
+
+function makeCloudTexture() {
+  const w = 512, h = 256;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  const puffs = [
+    [130, 155, 85, .52], [215, 125, 95, .60], [300, 150, 105, .62],
+    [372, 163, 72, .48], [265, 180, 95, .50], [180, 183, 94, .55],
+    [315, 185, 76, .48], [240, 78, 58, .35]
+  ];
+  for (const [x, y, r, a] of puffs) {
+    const g = ctx.createRadialGradient(x, y - 12, r * 0.06, x, y, r);
+    g.addColorStop(0, `rgba(255,253,245,${a})`);
+    g.addColorStop(0.48, `rgba(250,248,238,${a * 0.66})`);
+    g.addColorStop(0.78, `rgba(224,231,229,${a * 0.18})`);
+    g.addColorStop(1, 'rgba(220,228,226,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return finalizeTexture(c);
+}
+
+function makeSoftDotTexture() {
+  const size = 64;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 31);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.92)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function makeContactShadowTexture() {
+  const size = 128;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 3, 64, 64, 62);
+  g.addColorStop(0, 'rgba(26,31,22,.72)');
+  g.addColorStop(0.42, 'rgba(26,31,22,.35)');
+  g.addColorStop(1, 'rgba(26,31,22,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function makeSignTexture(title, subtitle) {
+  const w = 512, h = 256;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#72563f';
+  ctx.fillRect(0, 0, w, h);
+  const grain = ctx.createLinearGradient(0, 0, w, h);
+  grain.addColorStop(0, 'rgba(255,230,180,.08)');
+  grain.addColorStop(0.5, 'rgba(0,0,0,0)');
+  grain.addColorStop(1, 'rgba(55,36,24,.14)');
+  ctx.fillStyle = grain;
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(47,33,23,.45)';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(17, 17, w - 34, h - 34);
+  ctx.strokeStyle = 'rgba(235,219,186,.28)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(28, 28, w - 56, h - 56);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#f0e6d1';
+  ctx.font = '500 72px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText(title, w / 2, 122);
+  if (subtitle) {
+    ctx.fillStyle = 'rgba(238,225,199,.72)';
+    ctx.font = '400 26px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.letterSpacing = '4px';
+    ctx.fillText(subtitle, w / 2, 177);
+  }
+  return finalizeTexture(c);
+}
+
+function makePathAlphaTexture() {
+  const size = 64;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, size, 0);
+  g.addColorStop(0, '#000000');
+  g.addColorStop(0.12, '#ffffff');
+  g.addColorStop(0.88, '#ffffff');
+  g.addColorStop(1, '#000000');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+const tex = {
+  grass: makeGrassTexture(),
+  dirt: makeDirtTexture(),
+  soil: makeSoilTexture(),
+  straw: makeStrawTexture(false),
+  sheaf: makeStrawTexture(true),
+  wood: makeWoodTexture(),
+  roof: makeRoofTexture(),
+  stone: makeStoneTexture(),
+  wheat: makeWheatCardTexture('wheat'),
+  oat: makeWheatCardTexture('oat'),
+  grassCard: makeGrassCardTexture(false),
+  dryGrass: makeGrassCardTexture(true),
+  flowers: makeFlowerCardTexture(),
+  cloud: makeCloudTexture(),
+  dot: makeSoftDotTexture(),
+  contact: makeContactShadowTexture(),
+  pathAlpha: makePathAlphaTexture()
+};
+
+const mat = {
+  grassGround: new THREE.MeshStandardMaterial({ map: tex.grass, roughness: 1, metalness: 0 }),
+  dirt: new THREE.MeshStandardMaterial({ map: tex.dirt, roughness: .98, metalness: 0 }),
+  wood: new THREE.MeshStandardMaterial({ map: tex.wood, roughness: .88, metalness: 0 }),
+  darkWood: new THREE.MeshStandardMaterial({ map: tex.wood, color: 0x89735d, roughness: .92, metalness: 0 }),
+  paleWood: new THREE.MeshStandardMaterial({ map: tex.wood, color: 0xd3b98f, roughness: .9, metalness: 0 }),
+  roof: new THREE.MeshStandardMaterial({ map: tex.roof, roughness: .92, metalness: 0 }),
+  stone: new THREE.MeshStandardMaterial({ map: tex.stone, roughness: .95, metalness: 0 }),
+  straw: new THREE.MeshStandardMaterial({ map: tex.straw, roughness: 1, metalness: 0 }),
+  sheaf: new THREE.MeshStandardMaterial({ map: tex.sheaf, roughness: 1, metalness: 0 }),
+  whiteFabric: new THREE.MeshStandardMaterial({ color: 0xe5ddc9, roughness: 1, metalness: 0 }),
+  fabricRed: new THREE.MeshStandardMaterial({ color: 0x987064, roughness: 1, metalness: 0 }),
+  darkMetal: new THREE.MeshStandardMaterial({ color: 0x4a4942, roughness: .55, metalness: .45 }),
+  water: null
+};
+
+/* =========================================================
+   天空、云与地面
+   ========================================================= */
+function createSky() {
+  const skyGeo = new THREE.SphereGeometry(180, 36, 20);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+    uniforms: {
+      uTop: { value: new THREE.Color(0x7d9db3) },
+      uHorizon: { value: new THREE.Color(0xe5e5d9) },
+      uHaze: { value: new THREE.Color(0xd1d9d0) },
+      uSunColor: { value: new THREE.Color(0xffe0b8) },
+      uSunDir: { value: SUN_DIR.clone() }
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main(){
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vDir;
+      uniform vec3 uTop, uHorizon, uHaze, uSunColor, uSunDir;
+      void main(){
+        float h = clamp(vDir.y, -0.2, 1.0);
+        vec3 col = mix(uHorizon, uTop, smoothstep(-0.01, 0.66, h));
+        float horizonFade = smoothstep(0.20, -0.09, h);
+        col = mix(col, uHaze, horizonFade * 0.42);
+        float glow = pow(max(dot(vDir, normalize(uSunDir)), 0.0), 42.0);
+        col += uSunColor * glow * 0.16;
+        float halo = pow(max(dot(vDir, normalize(uSunDir)), 0.0), 7.0);
+        col += uSunColor * halo * 0.035;
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `
+  });
+  skyUniforms = skyMat.uniforms;
+  scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+  const cloudMat = new THREE.SpriteMaterial({
+    map: tex.cloud,
+    transparent: true,
+    opacity: .68,
+    depthWrite: false,
+    fog: false,
+    color: 0xfbf7eb
+  });
+  const cloudPositions = [
+    [-105, 31, -80, 1.35, .16], [-58, 38, -126, 1.1, .11], [48, 27, -108, 1.5, .13],
+    [112, 35, -44, 1.15, .18], [92, 41, 55, .95, .10], [-118, 33, 32, 1.25, .15],
+    [-35, 28, 108, 1.28, .12], [36, 24, 118, 1.0, .09], [130, 45, -5, .85, .08]
+  ];
+  for (let i = 0; i < cloudPositions.length; i++) {
+    const [x, y, z, scale, speed] = cloudPositions[i];
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    const count = 3;
+    for (let j = 0; j < count; j++) {
+      const s = new THREE.Sprite(cloudMat.clone());
+      s.material.opacity = .48 + Math.random() * .22;
+      s.position.set((j - 1) * 16 + srand(-5, 5), srand(-3, 3), srand(-4, 4));
+      s.scale.set(42 * scale * (0.8 + j * 0.18), 15 * scale, 1);
+      s.renderOrder = 3;
+      group.add(s);
+    }
+    group.userData = { speed, phase: srand(0, Math.PI * 2), baseX: x, baseZ: z };
+    scene.add(group);
+    world.clouds.push(group);
+  }
+}
+
+function terrainHeight(x, z) {
+  const r = Math.hypot(x, z);
+  if (r <= 46) return 0;
+  const d = r - 46;
+  const undulation = (Math.sin(x * .075) + Math.cos(z * .065) + Math.sin((x - z) * .032)) * 0.38;
+  return clamp(d * 0.068 + undulation * Math.min(1, d / 18), 0, 5.4);
+}
+
+function createGround() {
+  const geo = new THREE.PlaneGeometry(230, 230, 96, 96);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    pos.setY(i, terrainHeight(x, z));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  const ground = new THREE.Mesh(geo, mat.grassGround);
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // 远处的低丘，让画面有层次，同时交给雾去柔化。
+  const hillMat = new THREE.MeshStandardMaterial({ color: 0x8d9974, roughness: 1, metalness: 0, flatShading: true });
+  const hills = [
+    [-78, -66, 34, 7, 26], [46, -98, 42, 9, 34], [108, 4, 30, 6, 24],
+    [-96, 54, 38, 8, 28], [30, 102, 44, 8, 31], [-36, -122, 38, 7, 26]
+  ];
+  for (const [x, z, sx, sy, sz] of hills) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12), hillMat);
+    m.position.set(x, -1.2, z);
+    m.scale.set(sx, sy, sz);
+    scene.add(m);
+  }
+}
+
+function addPath(points, width = 1.6) {
+  const vecs = points.map(p => new THREE.Vector3(p[0], 0.032, p[1]));
+  const curve = new THREE.CatmullRomCurve3(vecs, false, 'catmullrom', 0.5);
+  const length = curve.getLength();
+  const steps = Math.max(12, Math.ceil(length / 1.1));
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const p = curve.getPoint(t);
+    const tan = curve.getTangent(t);
+    const n = new THREE.Vector3(-tan.z, 0, tan.x).normalize();
+    const breathe = width * (0.94 + Math.sin(t * 9.2) * 0.035 + Math.sin(t * 3.4 + 1) * 0.02);
+    positions.push(p.x + n.x * breathe, 0.032, p.z + n.z * breathe);
+    positions.push(p.x - n.x * breathe, 0.032, p.z - n.z * breathe);
+    const v = length * t / 2.7;
+    uvs.push(0, v, 1, v);
+    if (i < steps) {
+      const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+      indices.push(a, b, c, b, d, c);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({
+    map: tex.dirt,
+    alphaMap: tex.pathAlpha,
+    transparent: true,
+    alphaTest: 0.05,
+    depthWrite: false,
+    roughness: 1,
+    metalness: 0,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+    side: THREE.DoubleSide
+  });
+  const mesh = new THREE.Mesh(geo, material);
+  mesh.receiveShadow = true;
+  mesh.renderOrder = 2;
+  scene.add(mesh);
+}
+
+function createPaths() {
+  addPath([[0, 8.4], [0, 4], [-2.2, 1.2], [-3.4, -0.7]], 1.8);
+  addPath([[-1.2, 3.2], [-4.6, 4.5], [-8.2, 4.2], [-8.5, 1.8]], 1.28);
+  addPath([[1.2, 3.4], [4.4, 7.2], [7.2, 10.2]], 1.32);
+  addPath([[2.2, -1.1], [5.5, -4.2], [7.8, -5.5]], 1.22);
+  addPath([[-7.8, 9.2], [-11.8, 12.8], [-15.2, 17.2]], 1.15);
+  addPath([[-22.8, 23.5], [-20.8, 22.5], [-18.6, 22.1], [-17.2, 19.4]], 1.05);
+}
+
+function addSignboard(title, subtitle, x, z, scale = 1, rotation = Math.PI / 4) {
+  const group = new THREE.Group();
+  group.position.set(x, 0.02, z);
+  group.rotation.y = rotation;
+  const postGeo = new THREE.CylinderGeometry(.065, .09, 1.58, 6);
+  const p1 = new THREE.Mesh(postGeo, mat.darkWood);
+  p1.position.set(-.72 * scale, .79 * scale, 0);
+  p1.scale.setScalar(scale);
+  p1.castShadow = true;
+  const p2 = p1.clone();
+  p2.position.x = .72 * scale;
+  group.add(p1, p2);
+
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.05), new THREE.MeshStandardMaterial({
+    map: makeSignTexture(title, subtitle),
+    roughness: .9,
+    metalness: 0,
+    side: THREE.DoubleSide
+  }));
+  panel.position.y = 1.42 * scale;
+  panel.scale.setScalar(scale);
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  group.add(panel);
+
+  const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.26 * scale, .08 * scale, .09), mat.darkWood);
+  topBar.position.y = 1.98 * scale;
+  topBar.castShadow = true;
+  group.add(topBar);
+  scene.add(group);
+  return group;
+}
+
+/* =========================================================
+   作物实例与农田
+   ========================================================= */
+function applyWind(material, strength = 0.055) {
+  const id = ++windProgramCounter;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = { value: windTime };
+    shader.vertexShader = 'uniform float uTime;\nattribute float aPhase;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+      vec3 transformed = vec3(position);
+      float windHeight = clamp(position.y, 0.0, 1.2);
+      float phase = aPhase;
+      transformed.x += sin(uTime * 0.84 + phase) * ${strength.toFixed(4)} * windHeight * windHeight;
+      transformed.z += cos(uTime * 0.66 + phase * 1.37) * ${(strength * 0.62).toFixed(4)} * windHeight * windHeight;
+    `);
+    shader.uniforms.uTime.value = windTime;
+    windShaders.push(shader);
+    material.userData.shader = shader;
+  };
+  material.customProgramCacheKey = () => 'wind' + id;
+  material.needsUpdate = true;
+}
+
+function makeCrossCardGeometry(width, height, segments = 1) {
+  const hw = width / 2;
+  const positions = [
+    -hw, 0, 0, hw, 0, 0, hw, height, 0, -hw, height, 0,
+    0, 0, -hw, 0, 0, hw, 0, height, hw, 0, height, -hw
+  ];
+  const normals = new Float32Array(24);
+  for (let i = 0; i < 24; i += 3) { normals[i] = 0; normals[i + 1] = 1; normals[i + 2] = 0; }
+  const uvs = [0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1];
+  const indices = [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  return geo;
+}
+
+function makeInstancePhases(count) {
+  const phases = new Float32Array(count);
+  const attr = new THREE.InstancedBufferAttribute(phases, 1);
+  for (let i = 0; i < count; i++) phases[i] = srand(0, Math.PI * 2);
+  attr.setUsage(THREE.DynamicDrawUsage);
+  return attr;
+}
+
+function makeHayCardTexture() {
+  const w = 256, h = 320;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 42; i++) {
+    const x = 8 + Math.random() * 240;
+    const len = 100 + Math.random() * 160;
+    const bend = (Math.random() - 0.5) * 45;
+    const shade = Math.random();
+    ctx.strokeStyle = shade < 0.25 ? 'rgba(222,191,120,.64)' : shade < 0.68 ? 'rgba(168,144,88,.66)' : 'rgba(130,132,82,.60)';
+    ctx.lineWidth = 1.1 + Math.random() * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x, 322);
+    ctx.quadraticCurveTo(x + bend * 0.33, 322 - len * 0.55, x + bend, 322 - len);
+    ctx.stroke();
+    if (i % 8 === 0) {
+      ctx.strokeStyle = 'rgba(209,184,111,.52)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + bend, 322 - len);
+      ctx.lineTo(x + bend + srand(-8, 8), 322 - len - srand(12, 28));
+      ctx.stroke();
+    }
+  }
+  return finalizeTexture(c, 1, 1);
+}
+tex.hay = makeHayCardTexture();
+
+function makeCropMaterial(crop) {
+  let map = tex.wheat;
+  if (crop === 'oat') map = tex.oat;
+  if (crop === 'hay') map = tex.hay;
+  const material = new THREE.MeshLambertMaterial({
+    map,
+    alphaTest: 0.34,
+    side: THREE.DoubleSide,
+    color: 0xffffff
+  });
+  material.emissive = new THREE.Color(0x1a160b);
+  material.emissiveIntensity = 0.10;
+  applyWind(material, crop === 'hay' ? 0.050 : 0.058);
+  return material;
+}
+const cropMaterials = {
+  wheat: makeCropMaterial('wheat'),
+  oat: makeCropMaterial('oat'),
+  hay: makeCropMaterial('hay')
+};
+
+const FIELD_DEFS = [
+  { id: 'west-wheat', name: '西塬麦田', crop: 'wheat', x: -18, z: 1, w: 19, d: 17, initial: true },
+  { id: 'east-hay', name: '东谷干草田', crop: 'hay', x: 15.5, z: -9.5, w: 14, d: 11, initial: true },
+  { id: 'south-oat', name: '南坡燕麦田', crop: 'oat', x: 16, z: 12, w: 14, d: 11, initial: true },
+  { id: 'east-oat', name: '东岭燕麦田', crop: 'oat', x: 27, z: -25, w: 13, d: 10, unlockLevel: 1 },
+  { id: 'west-wheat-2', name: '西坡麦田', crop: 'wheat', x: -34, z: -15, w: 12, d: 14, unlockLevel: 2 },
+  { id: 'south-hay-2', name: '南野干草田', crop: 'hay', x: 2, z: 28, w: 17, d: 10, unlockLevel: 3 }
+];
+
+function makeFieldSoil(w, d, repeatX, repeatY) {
+  const geo = new THREE.PlaneGeometry(w, d, 1, 1);
+  geo.rotateX(-Math.PI / 2);
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, uv.getX(i) * repeatX, uv.getY(i) * repeatY);
+  }
+  uv.needsUpdate = true;
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    map: tex.soil,
+    roughness: 1,
+    metalness: 0,
+    color: 0xded4c0,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
+  }));
+  mesh.position.y = 0.023;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function createField(def, index) {
+  const active = def.initial || index < 3 + state.levels.fields;
+  const group = new THREE.Group();
+  group.position.set(def.x, 0, def.z);
+  scene.add(group);
+
+  const soil = makeFieldSoil(def.w, def.d, Math.max(2, def.w / 6.3), Math.max(2, def.d / 6.3));
+  group.add(soil);
+
+  const borderMat = new THREE.MeshStandardMaterial({ color: 0x695337, roughness: 1, metalness: 0, flatShading: true });
+  const edgeT = 0.12;
+  const edges = [
+    [0, -def.d / 2, def.w, edgeT],
+    [0, def.d / 2, def.w, edgeT],
+    [-def.w / 2, 0, edgeT, def.d],
+    [def.w / 2, 0, edgeT, def.d]
+  ];
+  for (const [ex, ez, ew, ed] of edges) {
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(ew, 0.16, ed), borderMat);
+    edge.position.set(ex, 0.08, ez);
+    edge.receiveShadow = true;
+    group.add(edge);
+  }
+
+  const spacing = 0.79;
+  const margin = 0.62;
+  const cols = Math.floor((def.w - margin * 2) / spacing) + 1;
+  const rows = Math.floor((def.d - margin * 2) / spacing) + 1;
+  const clusters = [];
+  const startX = -def.w / 2 + margin;
+  const startZ = -def.d / 2 + margin;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (srand(0, 1) < 0.035) continue;
+      const x = startX + c * spacing + srand(-0.17, 0.17);
+      const z = startZ + r * spacing + srand(-0.16, 0.16);
+      const wx = def.x + x;
+      const wz = def.z + z;
+      clusters.push({
+        x, z, wx, wz,
+        baseScale: srand(0.82, 1.10),
+        baseRot: srand(0, Math.PI * 2),
+        tiltX: srand(-0.025, 0.025),
+        tiltZ: srand(-0.035, 0.035),
+        state: active ? 'ready' : 'empty',
+        cutStart: 0,
+        cutDur: 0,
+        cutAxis: 0,
+        cutSign: 1,
+        regrowAt: 0,
+        growStart: 0,
+        growDur: 1
+      });
+    }
+  }
+
+  let cardW = 0.78, cardH = 0.9;
+  if (def.crop === 'oat') { cardW = 0.75; cardH = 0.88; }
+  if (def.crop === 'hay') { cardW = 0.82; cardH = 0.62; }
+  const cardGeo = makeCrossCardGeometry(cardW, cardH);
+  cardGeo.setAttribute('aPhase', makeInstancePhases(clusters.length));
+  const cropMesh = new THREE.InstancedMesh(cardGeo, cropMaterials[def.crop], clusters.length);
+  cropMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  cropMesh.castShadow = false;
+  cropMesh.receiveShadow = true;
+  cropMesh.frustumCulled = false;
+  const color = new THREE.Color();
+  for (let i = 0; i < clusters.length; i++) {
+    const v = srand(0.84, 1.0);
+    const warm = def.crop === 'hay' ? srand(0.05, 0.12) : srand(-0.02, 0.03);
+    color.setRGB(clamp(v + warm, 0, 1), clamp(v + warm * 0.45, 0, 1), clamp(v - warm * 0.35, 0, 1));
+    cropMesh.setColorAt(i, color);
+  }
+  cropMesh.instanceColor.needsUpdate = true;
+  cropMesh.visible = active;
+  group.add(cropMesh);
+
+  const field = {
+    ...def,
+    index,
+    group,
+    clusters,
+    cropMesh,
+    dummy: new THREE.Object3D(),
+    active,
+    lockGroup: null,
+    lockSign: null,
+    sign: null,
+    meshDirty: true
+  };
+
+  const lockGroup = new THREE.Group();
+  if (!active) {
+    const weeds = [];
+    for (let i = 0; i < 46; i++) {
+      weeds.push({
+        x: srand(-def.w / 2 + .5, def.w / 2 - .5),
+        z: srand(-def.d / 2 + .5, def.d / 2 - .5),
+        rot: srand(0, Math.PI * 2),
+        scale: srand(.55, .95)
+      });
+    }
+    const weedGeo = makeCrossCardGeometry(0.75, 0.8);
+    weedGeo.setAttribute('aPhase', makeInstancePhases(weeds.length));
+    const dryMat = new THREE.MeshLambertMaterial({
+      map: tex.dryGrass,
+      alphaTest: .26,
+      side: THREE.DoubleSide,
+      transparent: false
+    });
+    dryMat.emissive = new THREE.Color(0x14120b);
+    dryMat.emissiveIntensity = .08;
+    applyWind(dryMat, .045);
+    const weedMesh = new THREE.InstancedMesh(weedGeo, dryMat, weeds.length);
+    weedMesh.frustumCulled = false;
+    weedMesh.castShadow = false;
+    const d = new THREE.Object3D();
+    const col = new THREE.Color();
+    for (let i = 0; i < weeds.length; i++) {
+      const wd = weeds[i];
+      d.position.set(wd.x, 0.03, wd.z);
+      d.rotation.set(srand(-.04, .04), wd.rot, srand(-.06, .06));
+      d.scale.setScalar(wd.scale);
+      d.updateMatrix();
+      weedMesh.setMatrixAt(i, d.matrix);
+      col.setRGB(srand(.86, 1), srand(.82, .98), srand(.68, .84));
+      weedMesh.setColorAt(i, col);
+    }
+    weedMesh.instanceColor.needsUpdate = true;
+    lockGroup.add(weedMesh);
+    const sign = addSignboard('待开垦', CROPS[def.crop].label, def.x, def.z + def.d / 2 + .8, .72, Math.PI / 4);
+    field.lockSign = sign;
+  }
+  group.add(lockGroup);
+  field.lockGroup = lockGroup;
+  if (field.lockSign) field.lockSign.visible = !active;
+
+  writeAllClusterMatrices(field);
+  world.fields.push(field);
+  world.fieldsById[def.id] = field;
+  return field;
+}
+
+function createFields() {
+  FIELD_DEFS.forEach((def, i) => createField(def, i));
+}
+
+function writeClusterMatrix(field, cluster, scale, tiltExtra = 0, index = -1) {
+  const d = field.dummy;
+  d.position.set(cluster.x, 0.042, cluster.z);
+  d.rotation.set(cluster.tiltX + tiltExtra, cluster.baseRot, cluster.tiltZ + tiltExtra * 0.35);
+  d.scale.setScalar(Math.max(0, scale));
+  d.updateMatrix();
+  const idx = index >= 0 ? index : cluster.index;
+  field.cropMesh.setMatrixAt(idx, d.matrix);
+  field.meshDirty = true;
+}
+
+function writeAllClusterMatrices(field) {
+  for (let i = 0; i < field.clusters.length; i++) {
+    const c = field.clusters[i];
+    c.index = i;
+    const scale = c.state === 'ready' ? c.baseScale : 0;
+    writeClusterMatrix(field, c, scale, 0, i);
+  }
+  field.cropMesh.instanceMatrix.needsUpdate = true;
+  field.meshDirty = false;
+  field.cropMesh.visible = field.active;
+}
+
+function activateField(field) {
+  if (!field || field.active) return;
+  field.active = true;
+  field.cropMesh.visible = true;
+  if (field.lockGroup) field.lockGroup.visible = false;
+  if (field.lockSign) field.lockSign.visible = false;
+  for (let i = 0; i < field.clusters.length; i++) {
+    const c = field.clusters[i];
+    c.state = 'growing';
+    c.growStart = game.elapsed + srand(0.05, 1.4) + i * 0.001;
+    c.growDur = srand(1.4, 2.8);
+    writeClusterMatrix(field, c, 0.02, 0, i);
+  }
+  field.cropMesh.instanceMatrix.needsUpdate = true;
+  field.meshDirty = true;
+}
+
+function updateFieldGrowth() {
+  for (const field of world.fields) {
+    if (!field.active) continue;
+    let changed = false;
+    for (const c of field.clusters) {
+      if (c.state === 'cut') {
+        const t = clamp((game.elapsed - c.cutStart) / c.cutDur, 0, 1);
+        const s = c.baseScale * (1 - easeOutCubic(t) * .92);
+        const tilt = easeOutCubic(t) * (c.cutAxis === 0 ? 1.22 : 0.9) * c.cutSign;
+        writeClusterMatrix(field, c, s, tilt, c.index);
+        changed = true;
+        if (t >= 1) {
+          c.state = 'empty';
+          c.regrowAt = game.elapsed + srand(19, 30);
+          writeClusterMatrix(field, c, 0, 0, c.index);
+        }
+      } else if (c.state === 'empty' && game.elapsed >= c.regrowAt) {
+        c.state = 'growing';
+        c.growStart = game.elapsed;
+        c.growDur = srand(2.7, 4.2);
+      } else if (c.state === 'growing') {
+        const t = clamp((game.elapsed - c.growStart) / c.growDur, 0, 1);
+        const s = c.baseScale * (0.03 + easeOutCubic(t) * .97);
+        writeClusterMatrix(field, c, s, 0, c.index);
+        changed = true;
+        if (t >= 1) {
+          c.state = 'ready';
+          writeClusterMatrix(field, c, c.baseScale, 0, c.index);
+        }
+      }
+    }
+    if (changed) field.cropMesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+function harvestNearby() {
+  if (totalBack() >= stats.capacity) return;
+  let best = null;
+  let bestD2 = stats.radius * stats.radius;
+  for (const field of world.fields) {
+    if (!field.active) continue;
+    for (const c of field.clusters) {
+      if (c.state !== 'ready') continue;
+      const dx = c.wx - game.pos.x;
+      const dz = c.wz - game.pos.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = { field, c };
+      }
+    }
+  }
+  if (!best) return false;
+
+  const c = best.c;
+  c.state = 'cut';
+  c.cutStart = game.elapsed;
+  c.cutDur = srand(0.38, 0.55);
+  c.cutAxis = Math.random() < .55 ? 0 : 1;
+  c.cutSign = Math.random() < .5 ? -1 : 1;
+
+  state.back[best.field.crop] += 1;
+  game.harvestPulse = 1;
+  game.walkPhase += .2;
+  spawnHarvestParticles(c.wx, game.pos.y + .78, c.wz, best.field.crop);
+  if (totalBack() >= stats.capacity && !game.wasFull) {
+    game.wasFull = true;
+    showToast('背包已满，去谷仓卸下吧。', 2100);
+    if (navigator.vibrate) navigator.vibrate(18);
+  }
+  uiDirty = true;
+  queueSave();
+  return true;
+}
+
+function harvestParticlesForType(type) {
+  return type === 'wheat' ? [0xe2c47e, 0xcba45e, 0xf0dfac] : type === 'oat' ? [0xe7d59e, 0xc9b57e, 0xf4ead0] : [0xc9b97c, 0xb1a26d, 0xe0d3a1];
+}
+
+/* =========================================================
+   农场建筑与景物
+   ========================================================= */
+const BARN_DROP = new THREE.Vector2(0, 0.6);
+
+function createBarn() {
+  const barn = new THREE.Group();
+  barn.position.set(0, 0, -4);
+  scene.add(barn);
+
+  const foundation = new THREE.Mesh(new THREE.BoxGeometry(10, .62, 7.2), mat.stone);
+  foundation.position.y = .31;
+  foundation.castShadow = true;
+  foundation.receiveShadow = true;
+  barn.add(foundation);
+
+  const bodyMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0xc9b08d, roughness: .9, metalness: 0 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(9.4, 3.4, 6.6), bodyMat);
+  body.position.y = 2.3;
+  body.castShadow = true;
+  body.receiveShadow = true;
+  barn.add(body);
+
+  const beamMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0x7f5c43, roughness: .92, metalness: 0 });
+  const cornerGeo = new THREE.BoxGeometry(.16, 3.42, .16);
+  for (const cx of [-4.7, 4.7]) {
+    for (const cz of [-3.3, 3.3]) {
+      const beam = new THREE.Mesh(cornerGeo, beamMat);
+      beam.position.set(cx, 2.3, cz);
+      beam.castShadow = true;
+      barn.add(beam);
+    }
+  }
+
+  const roofMat = new THREE.MeshStandardMaterial({ map: tex.roof, color: 0xb08a78, roughness: .94, metalness: 0 });
+  const panelGeo = new THREE.BoxGeometry(5.95, .18, 7.8);
+  const leftRoof = new THREE.Mesh(panelGeo, roofMat);
+  leftRoof.position.set(-2.7, 5.35, 0);
+  leftRoof.rotation.z = 0.464;
+  leftRoof.castShadow = true;
+  leftRoof.receiveShadow = true;
+  const rightRoof = new THREE.Mesh(panelGeo, roofMat);
+  rightRoof.position.set(2.7, 5.35, 0);
+  rightRoof.rotation.z = -0.464;
+  rightRoof.castShadow = true;
+  rightRoof.receiveShadow = true;
+  barn.add(leftRoof, rightRoof);
+
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(.22, .18, 8.05), beamMat);
+  ridge.position.y = 6.76;
+  ridge.castShadow = true;
+  barn.add(ridge);
+
+  const gableShape = new THREE.Shape();
+  gableShape.moveTo(-5.35, 0);
+  gableShape.lineTo(5.35, 0);
+  gableShape.lineTo(0, 2.7);
+  gableShape.closePath();
+  const gableGeo = new THREE.ShapeGeometry(gableShape);
+  const gableMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0xb39775, roughness: .95, side: THREE.DoubleSide });
+  const frontGable = new THREE.Mesh(gableGeo, gableMat);
+  frontGable.position.set(0, 4.0, 3.32);
+  frontGable.castShadow = true;
+  barn.add(frontGable);
+  const backGable = frontGable.clone();
+  backGable.position.z = -3.32;
+  backGable.rotation.y = Math.PI;
+  barn.add(backGable);
+
+  // 门与门框
+  const doorMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0x5c4534, roughness: .94 });
+  const door = new THREE.Mesh(new THREE.BoxGeometry(3.08, 2.75, .10), doorMat);
+  door.position.set(0, 1.98, 3.38);
+  door.castShadow = true;
+  barn.add(door);
+  const doorCrossV = new THREE.Mesh(new THREE.BoxGeometry(.10, 2.62, .045), beamMat);
+  doorCrossV.position.set(0, 1.98, 3.44);
+  barn.add(doorCrossV);
+  for (const yy of [2.48, 1.98, 1.46]) {
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(2.85, .08, .045), beamMat);
+    cross.position.set(0, yy, 3.44);
+    barn.add(cross);
+  }
+  const frameL = new THREE.Mesh(new THREE.BoxGeometry(.18, 3.0, .18), mat.paleWood);
+  frameL.position.set(-1.7, 2.15, 3.4);
+  frameL.castShadow = true;
+  const frameR = frameL.clone();
+  frameR.position.x = 1.7;
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.6, .18, .2), mat.paleWood);
+  lintel.position.set(0, 3.68, 3.4);
+  lintel.castShadow = true;
+  barn.add(frameL, frameR, lintel);
+
+  // 谷仓窗
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0x334146, roughness: .32, metalness: .05 });
+  for (const wx of [-2.85, 2.85]) {
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(.72, .82), glassMat);
+    glass.position.set(wx, 2.55, 3.38);
+    barn.add(glass);
+    const winFrame = new THREE.Mesh(new THREE.BoxGeometry(.9, .98, .08), mat.paleWood);
+    winFrame.position.set(wx, 2.55, 3.35);
+    winFrame.castShadow = true;
+    barn.add(winFrame);
+    const winMullion = new THREE.Mesh(new THREE.BoxGeometry(.06, .82, .09), mat.darkWood);
+    winMullion.position.set(wx, 2.55, 3.40);
+    barn.add(winMullion);
+  }
+
+  const signTex = makeSignTexture('谷仓', '收获在此入库');
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.92), new THREE.MeshStandardMaterial({
+    map: signTex, roughness: .9, metalness: 0, side: THREE.DoubleSide
+  }));
+  sign.position.set(0, 4.35, 3.43);
+  sign.castShadow = true;
+  barn.add(sign);
+
+  // 门口暖光
+  const lantern = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8), new THREE.MeshStandardMaterial({
+    color: 0xf2cf91, emissive: 0xffb768, emissiveIntensity: 2.2, roughness: .45
+  }));
+  lantern.position.set(1.82, 3.05, 3.52);
+  barn.add(lantern);
+  const glow = new THREE.PointLight(0xffb875, 0.75, 7, 2);
+  glow.position.set(1.82, 3.0, 3.75);
+  barn.add(glow);
+
+  // 卸货提示圈
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xe0bd77, transparent: true, opacity: 0,
+    side: THREE.DoubleSide, depthWrite: false, blending: THREE.NormalBlending
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(2.05, 2.32, 56), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(0, .045, 4.5);
+  ring.renderOrder = 4;
+  barn.add(ring);
+  world.barnRing = ring;
+
+  colliders.push({ type: 'rect', minX: -5.15, maxX: 5.15, minZ: -7.65, maxZ: -0.32 });
+}
+
+function makeWaterBumpTexture() {
+  const size = 256;
+  const c = makeCanvas(size, size);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const h = Math.sin(x * .11 + Math.sin(y * .07) * 2.2) * .7
+        + Math.cos(y * .16 + x * .04) * .5
+        + Math.sin((x + y) * .07) * .28;
+      const v = clamp(127 + h * 45, 0, 255);
+      img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = v; img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2.6, 2.0);
+  return t;
+}
+
+function createPond() {
+  const pond = new THREE.Group();
+  pond.position.set(-19, 0, 23);
+  scene.add(pond);
+
+  const shoreMat = new THREE.MeshStandardMaterial({ map: tex.dirt, color: 0xcab48f, roughness: 1 });
+  const shoreGeo = new THREE.CircleGeometry(1, 64);
+  shoreGeo.rotateX(-Math.PI / 2);
+  const shore = new THREE.Mesh(shoreGeo, shoreMat);
+  shore.scale.set(7.5, 1, 5.85);
+  shore.position.y = .018;
+  shore.receiveShadow = true;
+  pond.add(shore);
+
+  const bed = new THREE.Mesh(shoreGeo, new THREE.MeshStandardMaterial({ color: 0x3f5142, roughness: 1 }));
+  bed.scale.set(6.78, 1, 5.12);
+  bed.position.y = -.055;
+  pond.add(bed);
+
+  const bump = makeWaterBumpTexture();
+  const waterMat = new THREE.MeshStandardMaterial({
+    color: 0x74998f,
+    roughness: .20,
+    metalness: .05,
+    transparent: true,
+    opacity: .82,
+    bumpMap: bump,
+    bumpScale: .12,
+    depthWrite: false
+  });
+  const water = new THREE.Mesh(shoreGeo, waterMat);
+  water.scale.set(6.72, 1, 5.06);
+  water.position.y = .064;
+  water.receiveShadow = true;
+  water.renderOrder = 5;
+  pond.add(water);
+  world.water = water;
+  world.waterBump = bump;
+
+  // 睡莲
+  const padMat = new THREE.MeshStandardMaterial({ color: 0x607c57, roughness: .9 });
+  const padGeo = new THREE.CircleGeometry(.33, 12);
+  padGeo.rotateX(-Math.PI / 2);
+  const pads = [[-2.4, .09, 1.6], [2.1, .09, -1.2], [-3.2, .09, -1.7], [1.4, .09, 2.4]];
+  for (const [px, py, pz] of pads) {
+    const pad = new THREE.Mesh(padGeo, padMat);
+    pad.position.set(px, py, pz);
+    pad.rotation.y = srand(0, 3);
+    pond.add(pad);
+  }
+
+  // 桥
+  const bridge = new THREE.Group();
+  bridge.position.set(0, 0, 0);
+  const plankGeo = new THREE.BoxGeometry(2.05, .075, .27);
+  const plankMesh = new THREE.InstancedMesh(plankGeo, mat.darkWood, 27);
+  const pd = new THREE.Object3D();
+  for (let i = 0; i < 27; i++) {
+    pd.position.set(0, .07, -5.15 + i * .385);
+    pd.rotation.y = srand(-.012, .012);
+    pd.updateMatrix();
+    plankMesh.setMatrixAt(i, pd.matrix);
+  }
+  plankMesh.instanceMatrix.needsUpdate = true;
+  plankMesh.castShadow = true;
+  plankMesh.receiveShadow = true;
+  bridge.add(plankMesh);
+  for (const sx of [-.98, .98]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(.09, .08, 10.9), mat.wood);
+    rail.position.set(sx, .77, 0);
+    rail.castShadow = true;
+    bridge.add(rail);
+    for (let i = 0; i < 6; i++) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(.09, .72, .09), mat.wood);
+      post.position.set(sx, .40, -5.0 + i * 2.0);
+      post.castShadow = true;
+      bridge.add(post);
+    }
+  }
+  pond.add(bridge);
+
+  // 芦苇
+  const reedPositions = [];
+  for (let i = 0; i < 44; i++) {
+    const a = srand(0, Math.PI * 2);
+    const rr = srand(.92, 1.06);
+    let x = Math.cos(a) * 6.7 * rr;
+    let z = Math.sin(a) * 5.05 * rr;
+    if (Math.abs(x) < 1.25) x += (x < 0 ? -1.7 : 1.7);
+    reedPositions.push({ x, z, rot: srand(0, 3), scale: srand(.55, 1.0) });
+  }
+  const reedGeo = makeCrossCardGeometry(.34, 1.15);
+  reedGeo.setAttribute('aPhase', makeInstancePhases(reedPositions.length));
+  const reedMat = new THREE.MeshLambertMaterial({ map: tex.dryGrass, alphaTest: .25, side: THREE.DoubleSide });
+  reedMat.emissive = new THREE.Color(0x16140c);
+  reedMat.emissiveIntensity = .10;
+  applyWind(reedMat, .032);
+  const reedMesh = new THREE.InstancedMesh(reedGeo, reedMat, reedPositions.length);
+  reedMesh.frustumCulled = false;
+  reedMesh.receiveShadow = true;
+  const rd = new THREE.Object3D();
+  for (let i = 0; i < reedPositions.length; i++) {
+    const rp = reedPositions[i];
+    rd.position.set(rp.x, .02, rp.z);
+    rd.rotation.set(srand(-.06, .06), rp.rot, srand(-.08, .08));
+    rd.scale.setScalar(rp.scale);
+    rd.updateMatrix();
+    reedMesh.setMatrixAt(i, rd.matrix);
+  }
+  reedMesh.instanceMatrix.needsUpdate = true;
+  pond.add(reedMesh);
+
+  colliders.push({ type: 'ellipse', cx: -19, cz: 23, rx: 7.0, rz: 5.35, bridgeX: -19, bridgeHalf: 1.15, bridgeZMin: 17.5, bridgeZMax: 28.8 });
+}
+
+function createWindmill() {
+  const group = new THREE.Group();
+  group.position.set(8, 0, -27);
+  group.rotation.y = Math.PI / 4;
+  scene.add(group);
+
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.85, 3.05, .7, 12), mat.stone);
+  base.position.y = .35;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
+
+  const towerMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0xceb893, roughness: .92, metalness: 0 });
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.42, 2.4, 8.1, 12), towerMat);
+  tower.position.y = 4.65;
+  tower.castShadow = true;
+  tower.receiveShadow = true;
+  group.add(tower);
+
+  const waist = new THREE.Mesh(new THREE.CylinderGeometry(1.53, 1.63, .18, 12), mat.darkWood);
+  waist.position.y = 7.65;
+  group.add(waist);
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.75, 12), mat.roof);
+  roof.position.y = 9.58;
+  roof.castShadow = true;
+  group.add(roof);
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(.9, 1.8, .08), mat.darkWood);
+  door.position.set(0, 1.55, 2.3);
+  group.add(door);
+
+  const rotor = new THREE.Group();
+  rotor.position.set(0, 8.15, 2.26);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(.27, .34, .4, 10), mat.darkWood);
+  hub.rotation.x = Math.PI / 2;
+  hub.castShadow = true;
+  rotor.add(hub);
+  const sailMat = new THREE.MeshStandardMaterial({ color: 0xe1d7c0, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+  for (let i = 0; i < 4; i++) {
+    const arm = new THREE.Group();
+    arm.rotation.z = i * Math.PI / 2;
+    const spar = new THREE.Mesh(new THREE.BoxGeometry(.1, 3.4, .07), mat.darkWood);
+    spar.position.y = 1.7;
+    spar.castShadow = true;
+    arm.add(spar);
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 2.45), sailMat);
+    cloth.position.set(.60, 1.76, .04);
+    cloth.castShadow = true;
+    arm.add(cloth);
+    for (let j = 0; j < 4; j++) {
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(1.1, .045, .07), mat.darkWood);
+      slat.position.set(.6, .9 + j * .55, .07);
+      arm.add(slat);
+    }
+    rotor.add(arm);
+  }
+  group.add(rotor);
+  world.windmillRotor = rotor;
+
+  colliders.push({ type: 'circle', x: 8, z: -27, r: 2.65 });
+}
+
+const canopyGeo = (() => {
+  const g = new THREE.IcosahedronGeometry(1, 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const v = new THREE.Vector3(p.getX(i), p.getY(i), p.getZ(i));
+    const len = v.length();
+    const n = 1 + Math.sin(v.x * 4 + v.y * 3) * .06 + Math.cos(v.z * 5) * .05;
+    v.multiplyScalar(n / (len || 1));
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  p.needsUpdate = true;
+  g.computeVertexNormals();
+  return g;
+})();
+const barkMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0x776050, roughness: 1, metalness: 0 });
+const leafPalette = [0x5b7050, 0x6c7d58, 0x77885d, 0x51684c, 0x858961, 0x64784f];
+
+function makeTree(x, z, scale = 1) {
+  const group = new THREE.Group();
+  group.position.set(x, terrainHeight(x, z), z);
+  group.scale.setScalar(scale);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.17, .34, 3.7, 8), barkMat);
+  trunk.position.y = 1.85;
+  trunk.castShadow = true;
+  trunk.receiveShadow = true;
+  group.add(trunk);
+
+  for (let i = 0; i < 3; i++) {
+    const branch = new THREE.Mesh(new THREE.CylinderGeometry(.055, .13, 1.9, 6), barkMat);
+    branch.position.set(Math.cos(i * 2.1) * .55, 3.18 + i * .18, Math.sin(i * 2.1) * .5);
+    branch.rotation.z = srand(-.85, .85);
+    branch.rotation.x = srand(-.55, .55);
+    branch.castShadow = true;
+    group.add(branch);
+  }
+
+  const canopyGroup = new THREE.Group();
+  const canopy = new THREE.InstancedMesh(canopyGeo, new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 }), 7);
+  const d = new THREE.Object3D();
+  const c = new THREE.Color();
+  const positions = [
+    [0, 4.55, 0, 1.65], [.95, 4.1, .35, 1.18], [-.95, 4.2, .18, 1.24],
+    [.15, 3.95, -.9, 1.2], [-.4, 5.35, -.25, 1.1], [1.1, 4.8, -.65, .92],
+    [-1.05, 4.85, .7, .86]
+  ];
+  for (let i = 0; i < positions.length; i++) {
+    const [px, py, pz, s] = positions[i];
+    d.position.set(px, py, pz);
+    d.rotation.set(srand(0, 2), srand(0, 3), srand(0, 2));
+    d.scale.set(s * 1.1, s * .9, s);
+    d.updateMatrix();
+    canopy.setMatrixAt(i, d.matrix);
+    c.setHex(leafPalette[Math.floor(srand(0, leafPalette.length))]);
+    canopy.setColorAt(i, c);
+  }
+  canopy.instanceMatrix.needsUpdate = true;
+  canopy.instanceColor.needsUpdate = true;
+  canopy.castShadow = true;
+  canopy.receiveShadow = true;
+  canopy.frustumCulled = false;
+  canopyGroup.add(canopy);
+  group.add(canopyGroup);
+  scene.add(group);
+  world.treeCanopies.push({ group: canopyGroup, phase: srand(0, Math.PI * 2), amount: srand(.006, .014) });
+  colliders.push({ type: 'circle', x, z, r: .55 * scale });
+}
+
+function createTrees() {
+  const treeSpots = [
+    [-39, -21, 1.18], [-36, 20, 1.05], [-30, 32, .86], [-12, -35, 1.15],
+    [32, -35, 1.22], [35, 22, 1.03], [24, 35, .90], [-41, 5, .92],
+    [42, -4, 1.08], [-5, -37, .94], [45, 12, .82], [-45, -12, 1.0]
+  ];
+  for (const [x, z, s] of treeSpots) makeTree(x, z, s);
+}
+
+function createBushes() {
+  const positions = [
+    [-31, 8, .8], [-29, 19, 1.0], [-11, 13, .8], [-9, -3, .75],
+    [1, -12, .9], [7, 2, .7], [23, -18, .8], [25, 3, .95],
+    [19, 19, .8], [-31, -7, 1.1], [-22, 33, .9], [31, 29, 1.0],
+    [5, 18, .7], [29, -8, .75], [-38, 28, .7], [35, -20, .85]
+  ];
+  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const bushMesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 }), positions.length);
+  const d = new THREE.Object3D();
+  const c = new THREE.Color();
+  for (let i = 0; i < positions.length; i++) {
+    const [x, z, s] = positions[i];
+    d.position.set(x, terrainHeight(x, z) + .38 * s, z);
+    d.rotation.set(srand(0, 1), srand(0, 3), srand(0, 1));
+    d.scale.set(1.2 * s, .58 * s, 1.0 * s);
+    d.updateMatrix();
+    bushMesh.setMatrixAt(i, d.matrix);
+    c.setHex(i % 3 === 0 ? 0x657052 : i % 3 === 1 ? 0x74805b : 0x596a4d);
+    bushMesh.setColorAt(i, c);
+  }
+  bushMesh.instanceMatrix.needsUpdate = true;
+  bushMesh.instanceColor.needsUpdate = true;
+  bushMesh.castShadow = true;
+  bushMesh.receiveShadow = true;
+  scene.add(bushMesh);
+}
+
+function createRocks() {
+  const spots = [
+    [-26.6, 21.2, .7], [-12.4, 22.8, .55], [-23.5, 18.0, .5], [-14.7, 26.9, .6],
+    [-29, 1, .45], [26.5, -17.5, .55], [-2, 20, .38], [29, 18, .5],
+    [-33, -2, .6], [18, -2.5, .4]
+  ];
+  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, color: 0xffffff }), spots.length);
+  const d = new THREE.Object3D();
+  const c = new THREE.Color();
+  for (let i = 0; i < spots.length; i++) {
+    const [x, z, s] = spots[i];
+    d.position.set(x, terrainHeight(x, z) + .18 * s, z);
+    d.rotation.set(srand(0, 2), srand(0, 2), srand(0, 2));
+    d.scale.set(1.15 * s, .58 * s, .9 * s);
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+    c.setHex(i % 2 ? 0x8b887a : 0x7f7e70);
+    mesh.setColorAt(i, c);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.instanceColor.needsUpdate = true;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+}
+
+function createFences() {
+  const postData = [];
+  const railData = [];
+  const addLine = (points) => {
+    for (let seg = 0; seg < points.length - 1; seg++) {
+      const [x1, z1] = points[seg];
+      const [x2, z2] = points[seg + 1];
+      const dx = x2 - x1, dz = z2 - z1;
+      const len = Math.hypot(dx, dz);
+      const count = Math.max(1, Math.ceil(len / 2.1));
+      for (let i = 0; i <= count; i++) {
+        const t = i / count;
+        postData.push({ x: x1 + dx * t, z: z1 + dz * t });
+      }
+      const angle = Math.atan2(-dz, dx);
+      for (let i = 0; i < count; i++) {
+        const t = (i + .5) / count;
+        const rl = Math.min(2.15, len / count);
+        railData.push({ x: x1 + dx * t, z: z1 + dz * t, angle, len: rl, y: .81 });
+        railData.push({ x: x1 + dx * t, z: z1 + dz * t, angle, len: rl, y: .46 });
+      }
+    }
+  };
+  addLine([[-27.8, -8.3], [-9.0, -8.3]]);
+  addLine([[-28.1, -7.1], [-28.1, 10.2]]);
+  addLine([[8.2, -16.1], [23.2, -16.1]]);
+  addLine([[23.9, -14.8], [23.9, -4.0]]);
+  addLine([[9.3, 18.1], [23.7, 18.1]]);
+  addLine([[24.2, 6.2], [24.2, 17.4]]);
+  addLine([[-30.5, 30.4], [-18.0, 30.4]]);
+  addLine([[-29.0, 16.8], [-26.0, 16.8]]);
+
+  const postGeo = new THREE.CylinderGeometry(.065, .085, 1.12, 6);
+  const postMesh = new THREE.InstancedMesh(postGeo, mat.darkWood, postData.length);
+  const d = new THREE.Object3D();
+  for (let i = 0; i < postData.length; i++) {
+    d.position.set(postData[i].x, .56, postData[i].z);
+    d.rotation.set(0, srand(0, 3), srand(-.018, .018));
+    d.scale.set(1, srand(.94, 1.03), 1);
+    d.updateMatrix();
+    postMesh.setMatrixAt(i, d.matrix);
+  }
+  postMesh.instanceMatrix.needsUpdate = true;
+  postMesh.castShadow = true;
+  postMesh.receiveShadow = true;
+  scene.add(postMesh);
+
+  const railGeo = new THREE.BoxGeometry(1, .060, .075);
+  const railMesh = new THREE.InstancedMesh(railGeo, mat.wood, railData.length);
+  for (let i = 0; i < railData.length; i++) {
+    const rl = railData[i];
+    d.position.set(rl.x, rl.y, rl.z);
+    d.rotation.set(0, rl.angle, srand(-.012, .012));
+    d.scale.set(rl.len, 1, srand(.9, 1.1));
+    d.updateMatrix();
+    railMesh.setMatrixAt(i, d.matrix);
+  }
+  railMesh.instanceMatrix.needsUpdate = true;
+  railMesh.castShadow = true;
+  scene.add(railMesh);
+}
+
+function addHayBales() {
+  const baleGeo = new THREE.CylinderGeometry(.56, .56, 1.03, 12);
+  const positions = [
+    [6.6, .56, 2.6, .3], [8.0, .56, 2.2, .8], [7.2, 1.54, 2.4, .6],
+    [20.5, .56, -18.5, .2], [22.1, .56, -18.2, 1.2], [-4.8, .56, 3.5, 1.0]
+  ];
+  for (const [x, y, z, rot] of positions) {
+    const bale = new THREE.Mesh(baleGeo, mat.straw);
+    bale.rotation.z = Math.PI / 2;
+    bale.rotation.y = rot;
+    bale.position.set(x, y, z);
+    bale.castShadow = true;
+    bale.receiveShadow = true;
+    scene.add(bale);
+  }
+  const crateMat = new THREE.MeshStandardMaterial({ map: tex.wood, color: 0xb99a70, roughness: .95 });
+  for (const [x, y, z, s] of [[-5.5, .38, 4.5, .72], [-6.2, 1.05, 4.2, .52], [5.2, .32, 5.4, .58]]) {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), crateMat);
+    crate.position.set(x, y, z);
+    crate.rotation.y = srand(0, .5);
+    crate.castShadow = true;
+    crate.receiveShadow = true;
+    scene.add(crate);
+  }
+}
+
+function decorBlocked(x, z, pad = 0) {
+  for (const f of world.fields) {
+    if (x > f.x - f.w / 2 - pad && x < f.x + f.w / 2 + pad &&
+        z > f.z - f.d / 2 - pad && z < f.z + f.d / 2 + pad) return true;
+  }
+  if (x > -5.5 - pad && x < 5.5 + pad && z > -8.2 - pad && z < .2 + pad) return true;
+  if (Math.hypot((x + 19) / (7.4 + pad), (z - 23) / (5.9 + pad)) < 1) return true;
+  if (Math.hypot(x - 8, z + 27) < 3.2 + pad) return true;
+  if (Math.abs(x - 6) < 1.5 && Math.abs(z - 10.5) < 1.0) return true;
+  return false;
+}
+
+function createMeadowDetails() {
+  // 草簇
+  const tufts = [];
+  let tries = 0;
+  while (tufts.length < 380 && tries < 1600) {
+    tries++;
+    const x = srand(-37, 35);
+    const z = srand(-27, 33);
+    if (decorBlocked(x, z, .25)) continue;
+    tufts.push({ x, z, rot: srand(0, Math.PI * 2), s: srand(.46, 1.12) });
+  }
+  const tuftGeo = makeCrossCardGeometry(.62, .56);
+  tuftGeo.setAttribute('aPhase', makeInstancePhases(tufts.length));
+  const tuftMat = new THREE.MeshLambertMaterial({ map: tex.grassCard, alphaTest: .25, side: THREE.DoubleSide });
+  tuftMat.emissive = new THREE.Color(0x15160c);
+  tuftMat.emissiveIntensity = .09;
+  applyWind(tuftMat, .045);
+  const tuftMesh = new THREE.InstancedMesh(tuftGeo, tuftMat, tufts.length);
+  tuftMesh.frustumCulled = false;
+  tuftMesh.receiveShadow = true;
+  const d = new THREE.Object3D();
+  const c = new THREE.Color();
+  for (let i = 0; i < tufts.length; i++) {
+    const t = tufts[i];
+    d.position.set(t.x, .025, t.z);
+    d.rotation.set(srand(-.04, .04), t.rot, srand(-.04, .04));
+    d.scale.setScalar(t.s);
+    d.updateMatrix();
+    tuftMesh.setMatrixAt(i, d.matrix);
+    c.setRGB(srand(.86, 1), srand(.9, 1), srand(.78, .94));
+    tuftMesh.setColorAt(i, c);
+  }
+  tuftMesh.instanceMatrix.needsUpdate = true;
+  tuftMesh.instanceColor.needsUpdate = true;
+  scene.add(tuftMesh);
+
+  // 野花
+  const flowers = [];
+  tries = 0;
+  while (flowers.length < 105 && tries < 500) {
+    tries++;
+    const x = srand(-34, 32);
+    const z = srand(-22, 32);
+    if (decorBlocked(x, z, .15)) continue;
+    flowers.push({ x, z, rot: srand(0, Math.PI * 2), s: srand(.55, .95) });
+  }
+  const flowerGeo = makeCrossCardGeometry(.48, .48);
+  flowerGeo.setAttribute('aPhase', makeInstancePhases(flowers.length));
+  const flowerMat = new THREE.MeshLambertMaterial({ map: tex.flowers, alphaTest: .27, side: THREE.DoubleSide });
+  flowerMat.emissive = new THREE.Color(0x15160e);
+  flowerMat.emissiveIntensity = .11;
+  applyWind(flowerMat, .036);
+  const flowerMesh = new THREE.InstancedMesh(flowerGeo, flowerMat, flowers.length);
+  flowerMesh.frustumCulled = false;
+  for (let i = 0; i < flowers.length; i++) {
+    const f = flowers[i];
+    d.position.set(f.x, .035, f.z);
+    d.rotation.set(srand(-.06, .06), f.rot, srand(-.04, .04));
+    d.scale.setScalar(f.s);
+    d.updateMatrix();
+    flowerMesh.setMatrixAt(i, d.matrix);
+    c.setRGB(srand(.9, 1), srand(.9, 1), srand(.9, 1));
+    flowerMesh.setColorAt(i, c);
+  }
+  flowerMesh.instanceMatrix.needsUpdate = true;
+  flowerMesh.instanceColor.needsUpdate = true;
+  scene.add(flowerMesh);
+
+  // 空气里漂浮的细尘
+  const count = 90;
+  const positions = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = srand(-33, 33);
+    positions[i * 3 + 1] = srand(.25, 3.6);
+    positions[i * 3 + 2] = srand(-30, 30);
+    phases[i] = srand(0, Math.PI * 2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const pointsMat = new THREE.PointsMaterial({
+    map: tex.dot,
+    color: 0xf3e6c9,
+    size: .11,
+    transparent: true,
+    opacity: .24,
+    depthWrite: false,
+    sizeAttenuation: true,
+    alphaTest: .02
+  });
+  const points = new THREE.Points(geo, pointsMat);
+  scene.add(points);
+  world.motes = { points, positions, phases, base: positions.slice(0) };
+}
+
+function createScenery() {
+  createBarn();
+  createPond();
+  createWindmill();
+  createTrees();
+  createBushes();
+  createRocks();
+  createFences();
+  addHayBales();
+  addSignboard('风谷农场', '麦田与谷仓', 6.0, 10.4, .92, Math.PI / 4);
+  createMeadowDetails();
+  // 起始锚点，避免初始视野偏空
+  const anchor = new THREE.Object3D();
+  anchor.position.set(0, 0, 0);
+  scene.add(anchor);
+}
+
+/* =========================================================
+   农场小人
+   ========================================================= */
+const PLAYER_RADIUS = 0.42;
+const LOAD_COLUMNS = [-.19, 0, .19];
+const LOAD_LAYERS = [.84, 1.16, 1.48, 1.79];
+
+function makeSheafBundle() {
+  const bundle = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.105, .125, .34, 9), mat.sheaf);
+  body.castShadow = true;
+  bundle.add(body);
+  const tie = new THREE.Mesh(new THREE.CylinderGeometry(.112, .112, .045, 9), new THREE.MeshStandardMaterial({
+    color: 0x7d6448, roughness: .95, metalness: 0
+  }));
+  tie.position.y = -.02;
+  bundle.add(tie);
+  return bundle;
+}
+
+function createCharacter() {
+  const root = new THREE.Group();
+  root.position.copy(game.pos);
+  scene.add(root);
+
+  const body = new THREE.Group();
+  root.add(body);
+
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd6ac86, roughness: .78, metalness: 0 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: 0xb5bfa9, roughness: .9, metalness: 0 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: 0x6a6552, roughness: .95, metalness: 0 });
+  const bootMat = new THREE.MeshStandardMaterial({ color: 0x584535, roughness: .9, metalness: 0 });
+  const hatMat = new THREE.MeshStandardMaterial({ color: 0xd3bc8c, roughness: .95, metalness: 0, side: THREE.DoubleSide });
+  const hairMat = new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: .95, metalness: 0 });
+  const strapMat = new THREE.MeshStandardMaterial({ color: 0x7d6448, roughness: .92, metalness: 0 });
+
+  // 躯干
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(.46, .56, .28), shirtMat);
+  torso.position.y = 1.17;
+  torso.castShadow = true;
+  torso.receiveShadow = true;
+  body.add(torso);
+
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(.135, .15, .07, 10), shirtMat);
+  collar.position.y = 1.47;
+  body.add(collar);
+
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(.48, .08, .30), strapMat);
+  belt.position.y = .90;
+  belt.castShadow = true;
+  body.add(belt);
+
+  // 背带
+  for (const bx of [-.13, .13]) {
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(.055, .50, .035), strapMat);
+    strap.position.set(bx, 1.30, .145);
+    strap.rotation.x = -.05;
+    body.add(strap);
+  }
+
+  // 头部
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.185, 20, 16), skinMat);
+  head.scale.set(1, 1.06, .96);
+  head.position.y = 1.61;
+  head.castShadow = true;
+  body.add(head);
+
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(.19, 18, 14), hairMat);
+  hair.scale.set(1.02, .84, 1.0);
+  hair.position.set(0, 1.635, -.035);
+  body.add(hair);
+
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), skinMat);
+  nose.position.set(0, 1.585, .178);
+  body.add(nose);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(.062, .068, .10, 8), skinMat);
+  neck.position.y = 1.46;
+  body.add(neck);
+
+  // 草帽
+  const hat = new THREE.Group();
+  hat.position.set(0, 1.74, 0);
+  hat.rotation.x = -.06;
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(.335, .355, .028, 22), hatMat);
+  brim.castShadow = true;
+  hat.add(brim);
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(.165, .198, .155, 18), hatMat);
+  crown.position.y = .088;
+  crown.castShadow = true;
+  hat.add(crown);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(.203, .203, .038, 18), strapMat);
+  band.position.y = .022;
+  hat.add(band);
+  body.add(hat);
+
+  // 手臂
+  const armGeo = new THREE.CylinderGeometry(.058, .048, .46, 8);
+  const armL = new THREE.Group();
+  armL.position.set(-.285, 1.36, 0);
+  const armLMesh = new THREE.Mesh(armGeo, shirtMat);
+  armLMesh.position.y = -.22;
+  armLMesh.castShadow = true;
+  armL.add(armLMesh);
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 6), skinMat);
+  handL.position.y = -.465;
+  armL.add(handL);
+  armL.rotation.z = .12;
+  body.add(armL);
+
+  const armR = new THREE.Group();
+  armR.position.set(.285, 1.36, 0);
+  const armRMesh = new THREE.Mesh(armGeo, shirtMat);
+  armRMesh.position.y = -.22;
+  armRMesh.castShadow = true;
+  armR.add(armRMesh);
+  const handR = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 6), skinMat);
+  handR.position.y = -.465;
+  armR.add(handR);
+  armR.rotation.z = -.12;
+  body.add(armR);
+
+  // 腿
+  const legGeo = new THREE.CylinderGeometry(.078, .066, .72, 8);
+  const legL = new THREE.Group();
+  legL.position.set(-.13, .87, 0);
+  const legLMesh = new THREE.Mesh(legGeo, pantsMat);
+  legLMesh.position.y = -.36;
+  legLMesh.castShadow = true;
+  legL.add(legLMesh);
+  const bootL = new THREE.Mesh(new THREE.BoxGeometry(.155, .15, .26), bootMat);
+  bootL.position.set(0, -.795, .055);
+  bootL.castShadow = true;
+  legL.add(bootL);
+  body.add(legL);
+
+  const legR = new THREE.Group();
+  legR.position.set(.13, .87, 0);
+  const legRMesh = new THREE.Mesh(legGeo, pantsMat);
+  legRMesh.position.y = -.36;
+  legRMesh.castShadow = true;
+  legR.add(legRMesh);
+  const bootR = new THREE.Mesh(new THREE.BoxGeometry(.155, .15, .26), bootMat);
+  bootR.position.set(0, -.795, .055);
+  bootR.castShadow = true;
+  legR.add(bootR);
+  body.add(legR);
+
+  // 背上的麦捆
+  const loadGroup = new THREE.Group();
+  loadGroup.position.set(0, 0, -.30);
+  body.add(loadGroup);
+  const bundles = [];
+  for (let i = 0; i < 10; i++) {
+    const layer = Math.floor(i / 3);
+    const col = i % 3;
+    const bundle = makeSheafBundle();
+    const baseX = LOAD_COLUMNS[col] * (layer % 2 ? 1 : .94);
+    bundle.position.set(baseX, LOAD_LAYERS[layer], -.02);
+    bundle.rotation.set(srand(-.05, .05), srand(0, Math.PI * 2), srand(-.05, .05));
+    bundle.userData.grow = 0;
+    bundle.scale.setScalar(0);
+    bundle.visible = false;
+    loadGroup.add(bundle);
+    bundles.push(bundle);
+  }
+
+  // 贴地软阴影
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), new THREE.MeshBasicMaterial({
+    map: tex.contact,
+    transparent: true,
+    opacity: .34,
+    depthWrite: false,
+    color: 0x39392c
+  }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = .028;
+  shadow.renderOrder = 3;
+  root.add(shadow);
+
+  playerRig = { root, body, head, hat, armL, armR, legL, legR, loadGroup, bundles, shadow };
+}
+
+function updateCharacter(dt) {
+  if (!playerRig) return;
+  const { root, body } = playerRig;
+
+  root.position.copy(game.pos);
+
+  const speed = Math.hypot(game.vel.x, game.vel.z);
+  const blendTarget = clamp(speed / Math.max(1.2, stats.speed), 0, 1);
+  game.moveBlend = damp(game.moveBlend, blendTarget, 8, dt);
+  game.walkPhase += speed * dt * 2.15;
+
+  if (speed > .12) {
+    const targetFacing = Math.atan2(game.vel.x, game.vel.z);
+    const diff = normalizeAngle(targetFacing - game.facing);
+    game.facing += diff * (1 - Math.exp(-9 * dt));
+  }
+  body.rotation.y = game.facing;
+
+  const swing = Math.sin(game.walkPhase) * .58 * game.moveBlend;
+  const lift = Math.abs(Math.sin(game.walkPhase * 2)) * .026 * game.moveBlend;
+
+  const pulse = game.harvestPulse;
+  if (pulse > 0) {
+    game.harvestPulse = Math.max(0, pulse - dt * 3.1);
+  }
+  const swingArm = pulse * .95;
+
+  playerRig.legL.rotation.x = swing;
+  playerRig.legR.rotation.x = -swing;
+  playerRig.armL.rotation.x = -swing * .62 - swingArm * .25;
+  playerRig.armR.rotation.x = swing * .62 + swingArm * 1.1;
+
+  body.position.y = lift;
+  body.rotation.x = -0.022 * game.moveBlend - pulse * .05;
+
+  const idle = Math.sin(game.elapsed * 1.5) * .012;
+  playerRig.head.rotation.y = idle;
+  playerRig.hat.rotation.z = -Math.sin(game.elapsed * 1.25) * .015 + swing * .02;
+  playerRig.hat.rotation.x = -.06 + Math.sin(game.elapsed * 1.1) * .008;
+
+  // 麦捆显示数量与生长
+  const total = totalBack();
+  const shown = total > 0 ? Math.min(10, Math.max(1, Math.ceil((total / stats.capacity) * 10))) : 0;
+  for (let i = 0; i < playerRig.bundles.length; i++) {
+    const bundle = playerRig.bundles[i];
+    const target = i < shown ? 1 : 0;
+    const grow = damp(bundle.userData.grow, target, 11, dt);
+    bundle.userData.grow = grow;
+    bundle.scale.setScalar(grow * .96);
+    bundle.visible = grow > .03;
+    if (bundle.visible) {
+      bundle.position.y = LOAD_LAYERS[Math.floor(i / 3)] + Math.sin(game.elapsed * 1.2 + i) * .006;
+    }
+  }
+  playerRig.loadGroup.rotation.z = Math.sin(game.elapsed * 1.4) * .008 * game.moveBlend;
+
+  playerRig.shadow.rotation.z = -game.facing;
+}
+
+/* =========================================================
+   轻粒子
+   ========================================================= */
+const PARTICLE_MAX = 220;
+
+function createParticles() {
+  const positions = new Float32Array(PARTICLE_MAX * 3);
+  const colors = new Float32Array(PARTICLE_MAX * 3);
+  const alphas = new Float32Array(PARTICLE_MAX);
+  const sizes = new Float32Array(PARTICLE_MAX);
+  for (let i = 0; i < PARTICLE_MAX; i++) positions[i * 3 + 1] = -60;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {},
+    vertexShader: `
+      attribute vec3 aColor;
+      attribute float aAlpha;
+      attribute float aSize;
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main(){
+        vColor = aColor;
+        vAlpha = aAlpha;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * (150.0 / max(0.001, -mv.z));
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vAlpha;
+      void main(){
+        vec2 p = gl_PointCoord - vec2(0.5);
+        float d = length(p);
+        if (d > 0.5) discard;
+        float soft = smoothstep(0.5, 0.08, d);
+        gl_FragColor = vec4(vColor, soft * vAlpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `
+  });
+
+  const points = new THREE.Points(geo, material);
+  points.frustumCulled = false;
+  points.renderOrder = 6;
+  scene.add(points);
+
+  world.particles = {
+    points,
+    geo,
+    positions,
+    colors,
+    alphas,
+    sizes,
+    vel: new Float32Array(PARTICLE_MAX * 3),
+    life: new Float32Array(PARTICLE_MAX),
+    maxLife: new Float32Array(PARTICLE_MAX),
+    sizeBase: new Float32Array(PARTICLE_MAX),
+    gravity: new Float32Array(PARTICLE_MAX),
+    head: 0
+  };
+}
+
+function emitParticle(x, y, z, vx, vy, vz, color, size, life, gravity = 1.6) {
+  const p = world.particles;
+  if (!p) return;
+  let idx = -1;
+  for (let i = 0; i < PARTICLE_MAX; i++) {
+    const n = (p.head + i) % PARTICLE_MAX;
+    if (p.life[n] <= 0) { idx = n; break; }
+  }
+  if (idx < 0) idx = p.head % PARTICLE_MAX;
+  p.head = (idx + 1) % PARTICLE_MAX;
+
+  p.positions[idx * 3] = x;
+  p.positions[idx * 3 + 1] = y;
+  p.positions[idx * 3 + 2] = z;
+  p.vel[idx * 3] = vx;
+  p.vel[idx * 3 + 1] = vy;
+  p.vel[idx * 3 + 2] = vz;
+  p.colors[idx * 3] = color.r;
+  p.colors[idx * 3 + 1] = color.g;
+  p.colors[idx * 3 + 2] = color.b;
+  p.alphas[idx] = 1;
+  p.sizes[idx] = size;
+  p.sizeBase[idx] = size;
+  p.life[idx] = life;
+  p.maxLife[idx] = life;
+  p.gravity[idx] = gravity;
+}
+
+const particleColor = new THREE.Color();
+
+function spawnHarvestParticles(x, y, z, type) {
+  if (!world.particles) return;
+  const palette = harvestParticlesForType(type);
+  const count = 5;
+  for (let i = 0; i < count; i++) {
+    particleColor.setHex(palette[Math.floor(Math.random() * palette.length)]);
+    emitParticle(
+      x + srand(-.22, .22), y + srand(-.1, .35), z + srand(-.22, .22),
+      srand(-.75, .75), srand(.9, 2.0), srand(-.75, .75),
+      particleColor, srand(.28, .52), srand(.55, 1.15), 1.2
+    );
+  }
+}
+
+function spawnUnloadParticles(x, y, z) {
+  if (!world.particles) return;
+  const palette = [0xe8cd8f, 0xf2e2b4, 0xd7b46f];
+  for (let i = 0; i < 6; i++) {
+    particleColor.setHex(palette[i % palette.length]);
+    emitParticle(
+      x + srand(-.5, .5), y + srand(-.3, .3), z + srand(-.5, .5),
+      srand(-.5, .5), srand(.5, 1.3), srand(-.5, .5),
+      particleColor, srand(.22, .40), srand(.5, .95), 1.1
+    );
+  }
+}
+
+function updateParticles(dt) {
+  const p = world.particles;
+  if (!p) return;
+  let dirty = false;
+  for (let i = 0; i < PARTICLE_MAX; i++) {
+    if (p.life[i] <= 0) continue;
+    p.life[i] -= dt;
+    if (p.life[i] <= 0) {
+      p.alphas[i] = 0;
+      p.sizes[i] = 0;
+      p.positions[i * 3 + 1] = -60;
+      dirty = true;
+      continue;
+    }
+    const t = p.life[i] / p.maxLife[i];
+    p.vel[i * 3 + 1] -= p.gravity[i] * dt;
+    p.vel[i * 3] *= 1 - 1.1 * dt;
+    p.vel[i * 3 + 2] *= 1 - 1.1 * dt;
+    p.positions[i * 3] += p.vel[i * 3] * dt;
+    p.positions[i * 3 + 1] += p.vel[i * 3 + 1] * dt;
+    p.positions[i * 3 + 2] += p.vel[i * 3 + 2] * dt;
+    p.alphas[i] = Math.min(1, t * 1.6) * .9;
+    p.sizes[i] = p.sizeBase[i] * (.55 + t * .55);
+    dirty = true;
+  }
+  if (dirty) {
+    p.geo.attributes.position.needsUpdate = true;
+    p.geo.attributes.aColor.needsUpdate = true;
+    p.geo.attributes.aAlpha.needsUpdate = true;
+    p.geo.attributes.aSize.needsUpdate = true;
+  }
+}
+
+/* =========================================================
+   输入与移动
+   ========================================================= */
+const MOVE_RIGHT = new THREE.Vector3(0.7071068, 0, -0.7071068);
+const MOVE_FORWARD = new THREE.Vector3(-0.7071068, 0, -0.7071068);
+const moveTmp = new THREE.Vector3();
+
+function bindInput() {
+  const stick = ui.joystick;
+  const knob = ui.knob;
+  const maxR = IS_COARSE ? 34 : 38;
+  let centerX = 0;
+  let centerY = 0;
+
+  const applyPointer = (e) => {
+    let dx = e.clientX - centerX;
+    let dy = e.clientY - centerY;
+    const len = Math.hypot(dx, dy);
+    if (len > maxR) {
+      dx = dx / len * maxR;
+      dy = dy / len * maxR;
+    }
+    knob.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px), calc(-50% + ${dy.toFixed(1)}px))`;
+    let nx = dx / maxR;
+    let ny = dy / maxR;
+    const mag = Math.hypot(nx, ny);
+    if (mag < 0.13) {
+      input.x = 0; input.y = 0;
+    } else {
+      input.x = nx; input.y = ny;
+    }
+    hideHint();
+  };
+
+  stick.addEventListener('pointerdown', (e) => {
+    if (input.pointerId !== null) return;
+    input.pointerId = e.pointerId;
+    stick.classList.add('dragging');
+    try { stick.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const rect = stick.getBoundingClientRect();
+    centerX = rect.left + rect.width / 2;
+    centerY = rect.top + rect.height / 2;
+    applyPointer(e);
+    e.preventDefault();
+  });
+  stick.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== input.pointerId) return;
+    applyPointer(e);
+    e.preventDefault();
+  });
+  const release = (e) => {
+    if (e.pointerId !== input.pointerId) return;
+    input.pointerId = null;
+    input.x = 0;
+    input.y = 0;
+    knob.style.transform = 'translate(-50%, -50%)';
+    stick.classList.remove('dragging');
+  };
+  stick.addEventListener('pointerup', release);
+  stick.addEventListener('pointercancel', release);
+  stick.addEventListener('lostpointercapture', release);
+
+  const BLOCK_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '];
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowup' || k === 'w') input.keys.add('up');
+    else if (k === 'arrowdown' || k === 's') input.keys.add('down');
+    else if (k === 'arrowleft' || k === 'a') input.keys.add('left');
+    else if (k === 'arrowright' || k === 'd') input.keys.add('right');
+    else if (k === 'escape') closePanel();
+    if (input.keys.size) hideHint();
+    if (BLOCK_KEYS.indexOf(e.key) >= 0) e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'arrowup' || k === 'w') input.keys.delete('up');
+    else if (k === 'arrowdown' || k === 's') input.keys.delete('down');
+    else if (k === 'arrowleft' || k === 'a') input.keys.delete('left');
+    else if (k === 'arrowright' || k === 'd') input.keys.delete('right');
+  });
+  window.addEventListener('blur', () => {
+    input.keys.clear();
+    input.x = 0;
+    input.y = 0;
+  });
+}
+
+function readMoveVector() {
+  let x = input.x;
+  let y = input.y;
+  if (input.keys.size) {
+    let kx = 0;
+    let ky = 0;
+    if (input.keys.has('left')) kx -= 1;
+    if (input.keys.has('right')) kx += 1;
+    if (input.keys.has('up')) ky -= 1;
+    if (input.keys.has('down')) ky += 1;
+    if (kx || ky) { x = kx; y = ky; }
+  }
+  const len = Math.hypot(x, y);
+  if (len > 1) { x /= len; y /= len; }
+  return { x, y };
+}
+
+function collides(x, z) {
+  const r = PLAYER_RADIUS;
+  for (let i = 0; i < colliders.length; i++) {
+    const c = colliders[i];
+    if (c.type === 'rect') {
+      if (x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r) return true;
+    } else if (c.type === 'circle') {
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const rr = c.r + r;
+      if (dx * dx + dz * dz < rr * rr) return true;
+    } else if (c.type === 'ellipse') {
+      if (c.bridgeX !== undefined &&
+          Math.abs(x - c.bridgeX) < c.bridgeHalf - .12 &&
+          z > c.bridgeZMin && z < c.bridgeZMax) continue;
+      const nx = (x - c.cx) / (c.rx + r);
+      const nz = (z - c.cz) / (c.rz + r);
+      if (nx * nx + nz * nz < 1) return true;
+    }
+  }
+  return false;
+}
+
+function resolveMove(dx, dz) {
+  if (dx !== 0) {
+    const nx = game.pos.x + dx;
+    if (!collides(nx, game.pos.z)) game.pos.x = nx;
+    else game.vel.x *= -0.10;
+  }
+  if (dz !== 0) {
+    const nz = game.pos.z + dz;
+    if (!collides(game.pos.x, nz)) game.pos.z = nz;
+    else game.vel.z *= -0.10;
+  }
+}
+
+function updatePlayer(dt) {
+  const v = readMoveVector();
+  const hasInput = Math.hypot(v.x, v.y) > 0.02;
+
+  moveTmp.set(0, 0, 0);
+  if (hasInput) {
+    moveTmp.addScaledVector(MOVE_RIGHT, v.x).addScaledVector(MOVE_FORWARD, -v.y);
+    if (moveTmp.lengthSq() > 0.0004) moveTmp.normalize();
+  }
+  const speedScale = hasInput ? 0.35 + Math.hypot(v.x, v.y) * 0.65 : 0;
+  const targetVX = moveTmp.x * stats.speed * speedScale;
+  const targetVZ = moveTmp.z * stats.speed * speedScale;
+  game.vel.x = damp(game.vel.x, targetVX, 9.5, dt);
+  game.vel.z = damp(game.vel.z, targetVZ, 9.5, dt);
+
+  resolveMove(game.vel.x * dt, game.vel.z * dt);
+
+  const radius = Math.hypot(game.pos.x, game.pos.z);
+  if (radius > 45.5) {
+    const k = 45.5 / radius;
+    game.pos.x *= k;
+    game.pos.z *= k;
+    game.vel.multiplyScalar(0.4);
+  }
+}
+
+/* =========================================================
+   相机
+   ========================================================= */
+const camDesired = new THREE.Vector3();
+const camLookDesired = new THREE.Vector3();
+
+function updateCamera(dt) {
+  game.intro = Math.min(1, game.intro + dt / 2.4);
+
+  const lift = 4.6 * (1 - easeOutCubic(game.intro));
+  camDesired.set(
+    game.pos.x + CAM_OFFSET.x + game.vel.x * 0.18,
+    CAM_OFFSET.y + lift,
+    game.pos.z + CAM_OFFSET.z + game.vel.z * 0.18
+  );
+  CAM_POS.x = damp(CAM_POS.x, camDesired.x, 3.0, dt);
+  CAM_POS.y = damp(CAM_POS.y, camDesired.y, 2.4, dt);
+  CAM_POS.z = damp(CAM_POS.z, camDesired.z, 3.0, dt);
+  camera.position.copy(CAM_POS);
+
+  camLookDesired.set(
+    game.pos.x + game.vel.x * 0.24,
+    0.98,
+    game.pos.z + game.vel.z * 0.24
+  );
+  CAM_LOOK.x = damp(CAM_LOOK.x, camLookDesired.x, 4.2, dt);
+  CAM_LOOK.y = damp(CAM_LOOK.y, camLookDesired.y, 4.2, dt);
+  CAM_LOOK.z = damp(CAM_LOOK.z, camLookDesired.z, 4.2, dt);
+  camera.lookAt(CAM_LOOK);
+
+  const fovTarget = 37 + Math.min(1.2, Math.hypot(game.vel.x, game.vel.z) * 0.10);
+  if (Math.abs(camera.fov - fovTarget) > 0.02) {
+    camera.fov = damp(camera.fov, fovTarget, 2.6, dt);
+    camera.updateProjectionMatrix();
+  }
+}
+
+/* =========================================================
+   谷仓、出售与升级
+   ========================================================= */
+const FIELD_NAMES_BY_LEVEL = ['东岭燕麦田', '西坡麦田', '南野干草田'];
+
+const UPGRADES = [
+  {
+    key: 'carry', name: '背负容量',
+    effect: (lvl) => `可背 ${18 + lvl * 6} 束麦捆`,
+    price: (lvl) => 90 + lvl * 46
+  },
+  {
+    key: 'radius', name: '收割范围',
+    effect: (lvl) => `自动收割半径 ${(2.35 + lvl * .52).toFixed(1)} 米`,
+    price: (lvl) => 110 + lvl * 52
+  },
+  {
+    key: 'speed', name: '移动速度',
+    effect: (lvl) => `步速 ${(4.2 + lvl * .38).toFixed(1)} 米 / 秒`,
+    price: (lvl) => 120 + lvl * 56
+  },
+  {
+    key: 'storage', name: '仓库容量',
+    effect: (lvl) => `谷仓可存 ${120 + lvl * 60} 束`,
+    price: (lvl) => 100 + lvl * 48
+  },
+  {
+    key: 'fields', name: '农田扩展',
+    effect: (lvl) => lvl >= 3 ? '所有田地已开垦' : `开垦「${FIELD_NAMES_BY_LEVEL[lvl]}」`,
+    price: (lvl) => FIELD_UNLOCK_PRICES[Math.min(lvl, FIELD_UNLOCK_PRICES.length - 1)]
+  }
+];
+
+const upgradeUI = new Map();
+let panelOpen = false;
+
+function buildUpgradePanel() {
+  ui.upgradeList.innerHTML = '';
+  for (const item of UPGRADES) {
+    const row = document.createElement('div');
+    row.className = 'upgrade-row';
+
+    const info = document.createElement('div');
+    info.className = 'upgrade-info';
+    const nameLine = document.createElement('div');
+    nameLine.className = 'upgrade-name';
+    const nameText = document.createElement('span');
+    nameText.textContent = item.name;
+    const levelEl = document.createElement('em');
+    nameLine.append(nameText, levelEl);
+    const effectEl = document.createElement('div');
+    effectEl.className = 'upgrade-effect';
+    info.append(nameLine, effectEl);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'upgrade-btn';
+    const actionEl = document.createElement('span');
+    actionEl.className = 'action';
+    actionEl.textContent = '升级';
+    const priceEl = document.createElement('span');
+    priceEl.className = 'price';
+    btn.append(actionEl, priceEl);
+    btn.addEventListener('click', () => buyUpgrade(item.key));
+
+    row.append(info, btn);
+    ui.upgradeList.appendChild(row);
+    upgradeUI.set(item.key, { levelEl, effectEl, btn, actionEl, priceEl });
+  }
+}
+
+function refreshUpgradeUI() {
+  for (const item of UPGRADES) {
+    const refs = upgradeUI.get(item.key);
+    if (!refs) continue;
+    const lvl = state.levels[item.key];
+    const max = MAX_LEVELS[item.key];
+    const maxed = lvl >= max;
+    refs.levelEl.textContent = `Lv ${lvl}`;
+    refs.effectEl.textContent = item.effect(lvl);
+    if (maxed) {
+      refs.btn.classList.add('maxed');
+      refs.btn.disabled = true;
+      refs.actionEl.textContent = '已满';
+      refs.priceEl.textContent = '—';
+    } else {
+      const price = item.price(lvl);
+      refs.btn.classList.remove('maxed');
+      refs.btn.disabled = state.coins < price;
+      refs.actionEl.textContent = '升级';
+      refs.priceEl.textContent = formatNumber(price);
+    }
+  }
+}
+
+function bumpStat(el) {
+  if (!el) return;
+  el.classList.remove('bump');
+  void el.offsetWidth;
+  el.classList.add('bump');
+  window.setTimeout(() => el.classList.remove('bump'), 430);
+}
+
+function buyUpgrade(key) {
+  const item = UPGRADES.find((u) => u.key === key);
+  if (!item) return;
+  const lvl = state.levels[key];
+  if (lvl >= MAX_LEVELS[key]) return;
+  const price = item.price(lvl);
+  if (state.coins < price) {
+    showToast('金币还差一点，先出售一些作物。', 1500);
+    return;
+  }
+
+  state.coins -= price;
+  state.levels[key] = lvl + 1;
+  if (key === 'fields') {
+    const field = world.fields[3 + lvl];
+    if (field) activateField(field);
+  }
+  recalcStats();
+  uiDirty = true;
+  queueSave(400);
+  playUpgrade();
+  bumpStat(ui.statCoins);
+  showToast(key === 'fields' ? `已开垦「${FIELD_NAMES_BY_LEVEL[lvl]}」` : `${item.name} · Lv ${lvl + 1}`, 1700);
+}
+
+function sellAll() {
+  const value = storageValue();
+  if (value <= 0) {
+    showToast('谷仓是空的，先去田里收割。', 1500);
+    return;
+  }
+  for (const k of CROP_KEYS) state.storage[k] = 0;
+  state.coins += value;
+  uiDirty = true;
+  saveNow();
+  playSell();
+  bumpStat(ui.statCoins);
+  showToast(`出售 +${formatNumber(value)} 金币`, 1700);
+}
+
+function updateBarn(dt) {
+  const ring = world.barnRing;
+  if (!ring) return;
+
+  const carrying = totalBack() > 0;
+  const dist = Math.hypot(game.pos.x - BARN_DROP.x, game.pos.z - BARN_DROP.y);
+  const near = dist < 4.2;
+  let ringTarget = 0;
+  if (carrying) ringTarget = near ? 0.30 + Math.sin(game.elapsed * 2.4) * 0.10 : 0.075;
+  ring.material.opacity = damp(ring.material.opacity, ringTarget, 5, dt);
+  ring.scale.setScalar(1 + Math.sin(game.elapsed * 1.7) * 0.02);
+
+  game.barnCooldown = Math.max(0, game.barnCooldown - dt);
+  if (!carrying || dist >= 3.5 || game.barnCooldown > 0) return;
+
+  if (stats.storage - totalStorage() <= 0) {
+    if (storageFullCooldown > 0) return;
+    storageFullCooldown = 3.0;
+    showToast('谷仓已满，先出售一些作物。', 2000);
+    return;
+  }
+
+  let key = null;
+  let most = 0;
+  for (const k of CROP_KEYS) {
+    if (state.back[k] > most) { most = state.back[k]; key = k; }
+  }
+  if (!key) { game.wasFull = false; return; }
+
+  state.back[key] -= 1;
+  state.storage[key] += 1;
+  game.wasFull = false;
+  game.barnCooldown = 0.075;
+  game.unloadPulse = 1;
+  spawnUnloadParticles(BARN_DROP.x + srand(-.6, .6), 1.15, BARN_DROP.y - .5 + srand(-.3, .3));
+  playStore();
+  uiDirty = true;
+  queueSave(500);
+
+  if (totalBack() === 0) {
+    bumpStat(ui.statStorage);
+    showToast('全部入库。', 1400);
+  }
+}
+
+function updateHarvest(dt) {
+  game.harvestTimer -= dt;
+  if (game.harvestTimer > 0) return;
+  game.harvestTimer = 0.26;
+  if (harvestNearby()) playHarvest();
+}
+
+/* =========================================================
+   场景微动
+   ========================================================= */
+function updateWorld(dt) {
+  const t = game.elapsed;
+
+  for (const cloud of world.clouds) {
+    const u = cloud.userData;
+    cloud.position.x = u.baseX + Math.sin(t * 0.035 + u.phase) * 24;
+    cloud.position.z = u.baseZ + Math.sin(t * 0.021 + u.phase * 1.7) * 10;
+  }
+
+  if (world.windmillRotor) world.windmillRotor.rotation.z -= dt * 0.30;
+
+  if (world.waterBump) {
+    world.waterBump.offset.x = (t * 0.006) % 1;
+    world.waterBump.offset.y = (t * 0.004) % 1;
+  }
+
+  for (const tree of world.treeCanopies) {
+    tree.group.rotation.z = Math.sin(t * 0.55 + tree.phase) * tree.amount;
+    tree.group.rotation.x = Math.cos(t * 0.42 + tree.phase * 1.3) * tree.amount * 0.7;
+  }
+
+  const motes = world.motes;
+  if (motes) {
+    const arr = motes.positions;
+    const base = motes.base;
+    for (let i = 0; i < motes.phases.length; i++) {
+      const ph = motes.phases[i];
+      arr[i * 3] = base[i * 3] + Math.sin(t * 0.31 + ph) * 0.6;
+      arr[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.47 + ph * 1.2) * 0.16;
+      arr[i * 3 + 2] = base[i * 3 + 2] + Math.cos(t * 0.26 + ph) * 0.45;
+    }
+    motes.points.geometry.attributes.position.needsUpdate = true;
+  }
+}
+
+function updateSun() {
+  const t = game.elapsed;
+  const drift = Math.sin(t * 0.055) * 0.5 + Math.sin(t * 0.017) * 0.3;
+
+  sunLight.position.set(
+    game.pos.x + SUN_DIR.x * 44 + drift,
+    SUN_DIR.y * 44,
+    game.pos.z + SUN_DIR.z * 44 - drift
+  );
+  sunLight.target.position.set(game.pos.x, 0, game.pos.z);
+  sunLight.target.updateMatrixWorld();
+  sunLight.intensity = 2.28 + Math.sin(t * 0.05) * 0.12;
+  renderer.toneMappingExposure = 1.06 + Math.sin(t * 0.04) * 0.022;
+}
+
+/* =========================================================
+   主循环
+   ========================================================= */
+let uiAccum = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, clock.getDelta());
+  if (!game.ready) return;
+
+  game.elapsed += dt;
+  windTime = game.elapsed;
+
+  updatePlayer(dt);
+  updateCharacter(dt);
+  updateHarvest(dt);
+  updateBarn(dt);
+  updateFieldGrowth();
+  updateParticles(dt);
+  updateCamera(dt);
+  updateWorld(dt);
+  updateSun(dt);
+
+  for (let i = 0; i < windShaders.length; i++) {
+    windShaders[i].uniforms.uTime.value = windTime;
+  }
+
+  if (uiDirty && uiAccum > 0.09) {
+    refreshAllUI();
+    uiAccum = 0;
+  }
+  uiAccum += dt;
+
+  storageFullCooldown = Math.max(0, storageFullCooldown - dt);
+  harvestToastCooldown = Math.max(0, harvestToastCooldown - dt);
+  fullPromptCooldown = Math.max(0, fullPromptCooldown - dt);
+
+  renderer.render(scene, camera);
+}
+
+function resize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, IS_MOBILE ? 1.5 : 1.8));
+  renderer.setSize(w, h, false);
+}
+
+/* =========================================================
+   界面刷新
+   ========================================================= */
+function refreshAllUI() {
+  const back = totalBack();
+  const stored = totalStorage();
+  ui.carry.textContent = `${back} / ${stats.capacity}`;
+  ui.storage.textContent = `${stored} / ${stats.storage}`;
+  ui.coins.textContent = formatNumber(state.coins);
+  ui.statCarry.classList.toggle('alert', back >= stats.capacity);
+  ui.statStorage.classList.toggle('alert', stored >= stats.storage);
+
+  const value = storageValue();
+  if (value > 0) {
+    ui.sellBtn.classList.remove('is-empty');
+    ui.sellLabel.textContent = `出售 · ${formatNumber(value)}`;
+  } else {
+    ui.sellBtn.classList.add('is-empty');
+    ui.sellLabel.textContent = '一键出售';
+  }
+
+  refreshUpgradeUI();
+  uiDirty = false;
+}
+
+function showToast(text, ms = 1800) {
+  const el = ui.toast;
+  el.textContent = text;
+  el.classList.add('show');
+  window.clearTimeout(toastTimeout);
+  toastTimeout = window.setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function showHint(ms = 6000) {
+  window.clearTimeout(hintTimeout);
+  ui.hint.classList.remove('hide');
+  hintTimeout = window.setTimeout(() => ui.hint.classList.add('hide'), ms);
+}
+
+function hideHint() {
+  window.clearTimeout(hintTimeout);
+  ui.hint.classList.add('hide');
+}
+
+function openPanel() {
+  panelOpen = true;
+  refreshAllUI();
+  ui.panel.classList.add('open');
+  ui.scrim.classList.add('open');
+  ui.panel.setAttribute('aria-hidden', 'false');
+  ui.openPanel.setAttribute('aria-expanded', 'true');
+}
+
+function closePanel() {
+  panelOpen = false;
+  ui.panel.classList.remove('open');
+  ui.scrim.classList.remove('open');
+  ui.panel.setAttribute('aria-hidden', 'true');
+  ui.openPanel.setAttribute('aria-expanded', 'false');
+}
+
+function bindUI() {
+  buildUpgradePanel();
+  ui.sellBtn.addEventListener('click', sellAll);
+  ui.openPanel.addEventListener('click', openPanel);
+  ui.closePanel.addEventListener('click', closePanel);
+  ui.scrim.addEventListener('click', closePanel);
+  ui.soundToggle.addEventListener('click', () => {
+    state.soundOn = !state.soundOn;
+    ensureAudio();
+    applySoundState(false);
+    syncAudioButton();
+    queueSave(300);
+    if (state.soundOn) playUpgrade();
+  });
+}
+
+/* =========================================================
+   轻柔音效
+   ========================================================= */
+let audioCtx = null;
+let audioMaster = null;
+let windNodes = null;
+let lastHarvestSound = -10;
+let lastStoreSound = -10;
+
+function ensureAudio() {
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    return;
+  }
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return;
+  try {
+    audioCtx = new Ctor();
+  } catch (err) {
+    return;
+  }
+
+  audioMaster = audioCtx.createGain();
+  audioMaster.gain.value = 0;
+  audioMaster.connect(audioCtx.destination);
+
+  // 持续的风声：低频噪点 + 缓慢起伏
+  const seconds = 4;
+  const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * seconds, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let smooth = 0;
+  for (let i = 0; i < data.length; i++) {
+    smooth = smooth * 0.94 + (Math.random() * 2 - 1) * 0.06;
+    data[i] = smooth * 3.2;
+  }
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+
+  const lowpass = audioCtx.createBiquadFilter();
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = 560;
+  lowpass.Q.value = 0.5;
+
+  const windGain = audioCtx.createGain();
+  windGain.gain.value = 0.22;
+
+  const lfo = audioCtx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.07;
+  const lfoGain = audioCtx.createGain();
+  lfoGain.gain.value = 0.08;
+  lfo.connect(lfoGain).connect(windGain.gain);
+  lfo.start();
+
+  source.connect(lowpass).connect(windGain).connect(audioMaster);
+  source.start();
+
+  windNodes = { source, lowpass, windGain, lfo };
+  applySoundState(true);
+}
+
+function applySoundState(instant) {
+  if (!audioCtx || !audioMaster) return;
+  const target = state.soundOn ? 0.55 : 0;
+  const now = audioCtx.currentTime;
+  if (instant) {
+    audioMaster.gain.setValueAtTime(target, now);
+  } else {
+    audioMaster.gain.cancelScheduledValues(now);
+    audioMaster.gain.setValueAtTime(audioMaster.gain.value, now);
+    audioMaster.gain.linearRampToValueAtTime(target, now + 0.4);
+  }
+}
+
+function syncAudioButton() {
+  ui.soundToggle.classList.toggle('on', state.soundOn);
+  ui.soundToggle.classList.toggle('off', !state.soundOn);
+  ui.soundToggle.setAttribute('aria-pressed', state.soundOn ? 'true' : 'false');
+  ui.soundLabel.textContent = state.soundOn ? '环境音 开' : '环境音 关';
+}
+
+function initAudio() {
+  const firstGesture = () => {
+    ensureAudio();
+    applySoundState(true);
+  };
+  window.addEventListener('pointerdown', firstGesture, { once: true });
+  window.addEventListener('keydown', firstGesture, { once: true });
+}
+
+function tone(freq, targetFreq, dur, type, volume, delay = 0) {
+  if (!audioCtx || !audioMaster || !state.soundOn) return;
+  const t0 = audioCtx.currentTime + delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (targetFreq) osc.frequency.linearRampToValueAtTime(targetFreq, t0 + dur);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(volume, t0 + 0.014);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(gain).connect(audioMaster);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.03);
+}
+
+function playHarvest() {
+  if (!audioCtx) return;
+  if (game.elapsed - lastHarvestSound < 0.40) return;
+  lastHarvestSound = game.elapsed;
+  tone(540, 470, 0.14, 'triangle', 0.075);
+}
+
+function playStore() {
+  if (game.elapsed - lastStoreSound < 0.20) return;
+  lastStoreSound = game.elapsed;
+  tone(230, 190, 0.2, 'sine', 0.07);
+}
+
+function playSell() {
+  tone(392, 392, 0.26, 'sine', 0.085, 0);
+  tone(523, 523, 0.30, 'sine', 0.075, 0.10);
+  tone(659, 659, 0.38, 'sine', 0.06, 0.20);
+}
+
+function playUpgrade() {
+  tone(440, 520, 0.26, 'triangle', 0.09, 0);
+  tone(660, 780, 0.34, 'sine', 0.07, 0.09);
+}
+
+/* =========================================================
+   启动
+   ========================================================= */
+window.addEventListener('resize', resize);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveNow();
+});
+
+try {
+  init();
+} catch (err) {
+  console.error('农场启动失败', err);
+  window.__farmReady = true;
+  if (ui.loading) ui.loading.classList.add('failed');
+  const errEl = $('loadError');
+  if (errEl) errEl.textContent = '加载失败：' + (err && err.message ? err.message : '未知错误');
+}
+
+  </script>
+</body>
+</html>
